@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
-const User = require('../model/User');
+const User = require('../models/User');
 
 const signTokens = (userId) => {
     const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '15m' });

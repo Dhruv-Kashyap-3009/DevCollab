@@ -22,4 +22,30 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticate };
+const requireProjectMember = (minRole = 'viewer') => {
+    const roleRank = { viewer: 0, editor: 1, owner: 2 };
+
+    return async (req, res, next) => {
+      try{
+        const project = await Project.findById(req.params.id || req.params.projectId);
+        if (!project) return res.status(404).json({ message: 'Project not found' });
+
+        const member = project.members.find(
+          m => m.user_id.toString() === req.user._id.toString()
+        );
+        if (!member) return res.status(403).json({ message: 'Not a project member' });
+
+        if (roleRank[member.role] < roleRank[minRole]) {
+          return res.status(403).json({ message: `Requires ${minRole} role or higher` });
+        }
+
+        req.project = project;
+        req.memberRole = member.role;
+        next();
+      }catch(err){
+        next(err);
+      }
+    };
+}
+
+module.exports = { authenticate, requireProjectMember };
