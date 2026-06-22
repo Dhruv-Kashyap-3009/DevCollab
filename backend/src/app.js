@@ -14,6 +14,7 @@ const authRoutes = require('./routes/auth');
 const projectRoutes = require('./routes/projects');
 const issueRoutes = require('./routes/issues');
 const snippetRoutes = require('./routes/snippets');
+const docRoutes = require('./routes/docs.js');
 
 const app = express();
 const server = http.createServer(app);
@@ -28,6 +29,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:id/issues', issueRoutes);
 app.use('/api/projects/:id/snippets', snippetRoutes);
+app.use('/api/projects/:id/docs', docRoutes);
 
 const PORT = process.env.PORT || 3000;
 
