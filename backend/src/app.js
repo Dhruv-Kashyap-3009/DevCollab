@@ -12,6 +12,7 @@ const { initWebSocket } = require('./websocket/wsServer');
 
 const authRoutes = require('./routes/auth');
 const projectRoutes = require('./routes/projects');
+const issueRoutes = require('./routes/issues');
 
 const app = express();
 const server = http.createServer(app);
@@ -24,6 +25,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/projects/:id/issues', issueRoutes);
 
 const PORT = process.env.PORT || 3000;
 
