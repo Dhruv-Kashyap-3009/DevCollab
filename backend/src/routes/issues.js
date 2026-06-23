@@ -5,7 +5,7 @@ const { listIssues, createIssue, getIssue, updateIssue, deleteIssue, addComment 
 
 const router = express.Router({ mergeParams: true });
 
-route.use(authenticate, requireProjectMember('viewer'));
+router.use(authenticate, requireProjectMember('viewer'));
 
 router.get('/', listIssues);
 router.post('/', [body('title').trim().notEmpty().withMessage('Title is required')], createIssue);

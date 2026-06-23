@@ -23,7 +23,7 @@ const issueSchema = mongoose.Schema({
         required: true
     },
     number: {
-        type: number,
+        type: 'number',
         required: true
     },
     title: {
