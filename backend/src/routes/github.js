@@ -4,7 +4,7 @@ const {
   connectGitHub, disconnectGitHub, getGitHubStatus, fetchCommits, fetchPullRequests, fetchBranches, handleWebhook
 } = require('../controllers/githubController');
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
 router.post('/webhook/:projectId', handleWebhook);
 

@@ -3,7 +3,7 @@ const { body } = require('express-validator');
 const { authenticate, requireProjectMember } = require('../middleware/auth');
 const { listDocs, createDoc, getDoc, updateDoc, deleteDoc } = require('../controllers/docController');
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 router.use(authenticate, requireProjectMember('viewer'));
 
 router.get('/', listDocs);
