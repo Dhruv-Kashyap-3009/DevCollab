@@ -8,6 +8,7 @@ const Snippet = require('../models/Snippet');
 const Doc = require('../models/Doc');
 const { logActivity } = require('../services/activityService');
 const { broadcastToProject } = require('../websocket/wsServer');
+const { sendInviteEmail } = require('../utils/sendEmail');
 
 const listProjects = async (req, res, next) => {
   try {
@@ -131,8 +132,14 @@ const inviteMember = async (req, res, next) => {
       invited_by: req.user._id,
     });
 
-    // In production, send email. For now return invite link.
     const inviteUrl = `${process.env.CLIENT_URL}/invite/${token}/accept`;
+
+    try {
+      await sendInviteEmail(email, inviteUrl, project.name, req.user.name);
+    } catch (emailErr) {
+      console.error('Email failed:', emailErr.message);
+    }
+
     res.status(201).json({ message: 'Invite created', inviteUrl, token });
   } catch (err) {
     next(err);

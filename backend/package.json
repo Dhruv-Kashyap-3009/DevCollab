@@ -5,7 +5,7 @@
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev" : "nodemon src/app.js" 
+    "dev": "nodemon src/app.js"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +23,7 @@
     "mongoose": "^9.7.1",
     "morgan": "^1.11.0",
     "node-fetch": "^3.3.2",
+    "nodemailer": "^9.0.1",
     "ws": "^8.21.0"
   }
 }
