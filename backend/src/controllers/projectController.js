@@ -123,6 +123,14 @@ const inviteMember = async (req, res, next) => {
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+    const existingInvite = await Invite.findOne({
+      project_id: project._id,
+      email: email.toLowerCase(),
+      accepted: false,
+      expires_at: { $gt: new Date() },
+    });
+    if (existingInvite) return res.status(409).json({ message: 'An invite has already been sent to this email' });
+
     await Invite.create({
       project_id: project._id,
       email: email.toLowerCase(),

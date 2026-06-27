@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import useAuthStore from './store/authStore';
 import AppLayout from './components/layout/AppLayout';
@@ -10,6 +10,7 @@ import IssuesPage from './pages/IssuesPage';
 import SnippetsPage from './pages/SnippetsPage';
 import DocsPage from './pages/DocsPage';
 import GitHubPage from './pages/GitHubPage';
+import AcceptInvitePage from './pages/AcceptInvitePage';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuthStore();
@@ -21,14 +22,11 @@ function RequireAuth({ children }) {
   return user ? children : <Navigate to="/login" replace />;
 }
 
-function ProjectLayoutWrapper({ title }) {
-  return <AppLayout title={title} />;
-}
 
 export default function App() {
   const init = useAuthStore(s => s.init);
 
-  useEffect(() => { init(); }, []);
+  useEffect(() => { init(); }, [init]);
 
   return (
     <BrowserRouter>
@@ -53,6 +51,10 @@ export default function App() {
           <Route path="docs" element={<DocsPage />} />
           <Route path="github" element={<GitHubPage />} />
         </Route>
+
+        <Route path="/invite/:token/accept" element={
+          <RequireAuth><AcceptInvitePage /></RequireAuth>
+        } />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
