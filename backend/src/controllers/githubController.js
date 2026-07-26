@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const fetch = require('node-fetch');
 const GithubIntegration = require('../models/GithubIntegration');
 const Project = require('../models/Project');
 const Issue = require('../models/Issue');
@@ -120,8 +119,7 @@ const handleWebhook = async (req, res, next) => {
     if (!integration) return res.status(404).json({ message: 'Integration not found' });
     const signature = req.headers['x-hub-signature-256'];
     if (!signature) return res.status(400).json({ message: 'Missing signature' });
-    const rawBody = JSON.stringify(req.body);
-    const expected = 'sha256=' + crypto.createHmac('sha256', integration.webhook_secret).update(rawBody).digest('hex');
+    const expected = 'sha256=' + crypto.createHmac('sha256', integration.webhook_secret).update(req.rawBody).digest('hex');
     if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
       return res.status(401).json({ message: 'Invalid signature' });
     }

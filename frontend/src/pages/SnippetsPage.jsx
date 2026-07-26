@@ -19,6 +19,9 @@ export default function SnippetsPage() {
   const [editSnippet, setEditSnippet] = useState(null);
   const [viewSnippet, setViewSnippet] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [pushSnippet, setPushSnippet] = useState(null);
+  const [pushPath, setPushPath] = useState('');
+  const [pushing, setPushing] = useState(false);
 
   useEffect(() => {
     snippetsApi.list(projectId).then(res => { setSnippets(res.data.snippets); setLoading(false); }).catch(() => setLoading(false));
@@ -54,6 +57,25 @@ export default function SnippetsPage() {
       if (viewSnippet?._id === id) setViewSnippet(null);
       toast.success('Snippet deleted');
     } catch { toast.error('Failed to delete'); }
+  };
+
+  const openPushModal = (snippet) => {
+    setPushSnippet(snippet);
+    setPushPath(`snippets/${snippet.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.txt`);
+  };
+
+  const confirmPush = async () => {
+    setPushing(true);
+    try {
+      const res = await snippetsApi.pushToGitHub(projectId, pushSnippet._id, { path: pushPath });
+      toast.success('Pushed to GitHub');
+      window.open(res.data.url, '_blank');
+      setPushSnippet(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to push to GitHub');
+    } finally {
+      setPushing(false);
+    }
   };
 
   const BackButton = () => (
@@ -99,6 +121,7 @@ export default function SnippetsPage() {
                 {viewSnippet.description && <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '4px' }}>{viewSnippet.description}</p>}
               </div>
               <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                <Button variant="ghost" size="sm" onClick={() => openPushModal(viewSnippet)}>Push to GitHub</Button>
                 <Button variant="ghost" size="sm" onClick={() => { setEditSnippet(viewSnippet); setViewSnippet(null); }}>Edit</Button>
                 <Button variant="danger" size="sm" onClick={() => deleteSnippet(viewSnippet._id)}>Delete</Button>
               </div>
@@ -132,6 +155,22 @@ export default function SnippetsPage() {
       </Modal>
       <Modal isOpen={!!editSnippet} onClose={() => setEditSnippet(null)} title="Edit snippet" width="600px">
         {editSnippet && <SnippetForm onSubmit={updateSnippet} loading={saving} initial={editSnippet} />}
+      </Modal>
+      <Modal isOpen={!!pushSnippet} onClose={() => setPushSnippet(null)} title="Push to GitHub" width="480px">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <label style={{ fontSize: '13px', color: 'var(--muted)' }}>File path in repo</label>
+          <input
+            value={pushPath}
+            onChange={e => setPushPath(e.target.value)}
+            placeholder="folder/subfolder/file.js"
+            style={{
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)', padding: '8px 10px',
+              fontSize: '13px', fontFamily: 'var(--font-mono)', color: 'var(--text)',
+            }}
+          />
+          <Button onClick={confirmPush} loading={pushing}>Push</Button>
+        </div>
       </Modal>
     </div>
   );

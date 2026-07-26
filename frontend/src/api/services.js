@@ -32,6 +32,7 @@ export const snippetsApi = {
   get: (projectId, id) => client.get(`/projects/${projectId}/snippets/${id}`),
   update: (projectId, id, data) => client.patch(`/projects/${projectId}/snippets/${id}`, data),
   delete: (projectId, id) => client.delete(`/projects/${projectId}/snippets/${id}`),
+  pushToGitHub: (projectId, id, data) => client.post(`/projects/${projectId}/snippets/${id}/push-to-github`, data),
 };
 
 export const docsApi = {

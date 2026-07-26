@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const { authenticate, requireProjectMember } = require('../middleware/auth');
-const { listSnippets, createSnippet, getSnippet, updateSnippet, deleteSnippet } = require('../controllers/snippetController');
+const { listSnippets, createSnippet, getSnippet, updateSnippet, deleteSnippet, pushSnippetToGitHub } = require('../controllers/snippetController');
 
 const router = express.Router({ mergeParams: true });
 router.use(authenticate, requireProjectMember('viewer'));
@@ -12,6 +12,7 @@ router.post('/', [
   body('code').notEmpty().withMessage('Code is required'),
   body('language').notEmpty().withMessage('Language is required'),
 ], createSnippet);
+router.post('/:snippetId/push-to-github', requireProjectMember('editor'), pushSnippetToGitHub);
 router.get('/:snippetId', getSnippet);
 router.patch('/:snippetId', updateSnippet);
 router.delete('/:snippetId', deleteSnippet);
