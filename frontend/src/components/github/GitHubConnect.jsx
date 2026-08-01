@@ -10,6 +10,7 @@ export default function GitHubConnect({ projectId, onConnected }) {
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [showHelp, setShowHelp] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,19 +50,51 @@ export default function GitHubConnect({ projectId, onConnected }) {
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div className="grid-2" style={{ gap: '12px' }}>
           <Input label="Repository Owner" value={repoOwner} onChange={e => setRepoOwner(e.target.value)} placeholder="octocat" required error={errors.repoOwner} />
           <Input label="Repository Name" value={repoName} onChange={e => setRepoName(e.target.value)} placeholder="my-project" required error={errors.repoName} />
         </div>
-        <Input label="Personal Access Token" type="password" value={token} onChange={e => setToken(e.target.value)} placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" required error={errors.token} />
-        <div style={{
-          background: 'var(--surface2)', border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)', padding: '10px 14px',
-          fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6,
-        }}>
-          Create a token at <strong style={{ color: 'var(--text-secondary)' }}>GitHub → Settings → Developer settings → Personal access tokens</strong>. Requires{' '}
-          <code style={{ background: 'var(--surface3)', padding: '1px 5px', borderRadius: '4px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--primary)' }}>repo</code> scope.
+        <Input label="Personal Access Token" type="password" value={token} onChange={e => setToken(e.target.value)} placeholder="github_pat_xxxxxxxxxxxxxxxxxxxx" required error={errors.token} />
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowHelp(s => !s)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px',
+              fontSize: '12px', color: 'var(--primary)', padding: '2px 0',
+              fontFamily: 'var(--font)',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: showHelp ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }}>
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            How do I get a token?
+          </button>
+
+          {showHelp && (
+            <ol style={{
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)', padding: '14px 16px 14px 32px',
+              marginTop: '8px', fontSize: '12px', color: 'var(--muted)',
+              lineHeight: 1.9,
+            }}>
+              <li>Go to <strong style={{ color: 'var(--text-secondary)' }}>GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens</strong></li>
+              <li>Click <strong style={{ color: 'var(--text-secondary)' }}>Generate new token</strong></li>
+              <li>Under <strong style={{ color: 'var(--text-secondary)' }}>Repository access</strong>, choose "Only select repositories" and pick the repo you want to connect</li>
+              <li>Under <strong style={{ color: 'var(--text-secondary)' }}>Permissions</strong>, set{' '}
+                <code style={{ background: 'var(--surface3)', padding: '1px 5px', borderRadius: '4px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--primary)' }}>Contents</code>{' '}
+                to Read and write, and{' '}
+                <code style={{ background: 'var(--surface3)', padding: '1px 5px', borderRadius: '4px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--primary)' }}>Pull requests</code>{' '}
+                to Read-only
+              </li>
+              <li>Click <strong style={{ color: 'var(--text-secondary)' }}>Generate token</strong> and copy it immediately — GitHub only shows it once</li>
+              <li>Paste the repository owner, name, and token above</li>
+            </ol>
+          )}
         </div>
+
         <Button type="submit" loading={loading} style={{ width: '100%' }}>Connect repository</Button>
       </form>
     </div>

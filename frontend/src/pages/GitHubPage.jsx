@@ -17,9 +17,9 @@ export default function GitHubPage() {
   const [status, setStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [commits, setCommits] = useState([]);
-  const [loadingCommits, setLoadingCommits] = useState(false);
+  const [loadingCommits, setLoadingCommits] = useState(true);
   const [pulls, setPulls] = useState([]);
-  const [loadingPulls, setLoadingPulls] = useState(false);
+  const [loadingPulls, setLoadingPulls] = useState(true);
   const [branches, setBranches] = useState([]);
   const [webhookData, setWebhookData] = useState({ url: '', secret: '' });
   const [recentEvents, setRecentEvents] = useState([]);
@@ -34,17 +34,15 @@ export default function GitHubPage() {
   useEffect(() => {
     if (!status?.connected) return;
     if (activeTab === 'Commits' && commits.length === 0) {
-      setLoadingCommits(true);
       githubApi.commits(projectId).then(res => { setCommits(res.data.commits || []); setLoadingCommits(false); }).catch(err => { toast.error(err.response?.data?.message || 'Failed to load commits'); setLoadingCommits(false); });
     }
     if (activeTab === 'Pull Requests' && pulls.length === 0) {
-      setLoadingPulls(true);
       githubApi.pulls(projectId).then(res => { setPulls(res.data.pulls || []); setLoadingPulls(false); }).catch(err => { toast.error(err.response?.data?.message || 'Failed to load PRs'); setLoadingPulls(false); });
     }
     if (activeTab === 'Overview' && branches.length === 0 && status?.connected) {
       githubApi.branches(projectId).then(res => setBranches(res.data.branches || [])).catch(() => {});
     }
-  }, [activeTab, status]);
+  }, [activeTab, status, projectId, commits.length, pulls.length, branches.length]);
 
   useProjectSocket(projectId, {
     onGithubEvent: (event) => {
@@ -76,7 +74,7 @@ export default function GitHubPage() {
   return (
     <div className="fade-in">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em' }}>GitHub</h1>
           <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '3px' }}>Repository integration</p>
@@ -94,7 +92,7 @@ export default function GitHubPage() {
         display: 'flex', gap: '2px', marginBottom: '24px',
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 'var(--radius-md)', padding: '4px',
-        width: 'fit-content',
+        width: 'fit-content', maxWidth: '100%', overflowX: 'auto',
       }}>
         {TABS.map(tab => (
           <button

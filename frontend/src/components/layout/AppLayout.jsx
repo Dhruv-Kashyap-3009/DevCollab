@@ -4,12 +4,12 @@ import TopBar from './TopBar';
 
 export default function AppLayout({ title }) {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
+    <div className="app-shell" style={{ background: 'var(--bg)' }}>
       <Sidebar />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <TopBar title={title} />
-        <main style={{
-          flex: 1, overflow: 'auto', padding: '28px 28px',
+        <main className="app-main" style={{
+          flex: 1, overflow: 'auto',
           background: 'var(--bg)',
         }}>
           <Outlet />

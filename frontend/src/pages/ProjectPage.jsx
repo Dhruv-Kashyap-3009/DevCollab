@@ -124,7 +124,7 @@ export default function ProjectPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }} className="fade-in">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em' }}>{project.name}</h1>
           {project.description && <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '4px' }}>{project.description}</p>}
@@ -136,14 +136,14 @@ export default function ProjectPage() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+      <div className="grid-4-stats" style={{ gap: '12px' }}>
         <StatCard label="Open Issues" value={stats.openIssues || 0} icon="◎" color="var(--danger)" />
         <StatCard label="Snippets" value={stats.totalSnippets || 0} icon="⟨⟩" color="var(--warning)" />
         <StatCard label="Docs" value={stats.totalDocs || 0} icon="≡" color="var(--purple)" />
         <StatCard label="Members" value={stats.memberCount || 0} icon="👥" color="var(--success)" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+      <div className="grid-2" style={{ gap: '20px', alignItems: 'start' }}>
         {/* Activity Feed */}
         <div>
           <h2 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Recent Activity</h2>
@@ -163,7 +163,7 @@ export default function ProjectPage() {
                   <span style={{
                     width: '26px', height: '26px',
                     borderRadius: '50%',
-                    background: 'var(--surface2)',
+                    background: activityColor[a.type] ? `color-mix(in srgb, ${activityColor[a.type]} 18%, var(--surface2))` : 'var(--surface2)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '12px', flexShrink: 0,
                   }}>{activityIcon[a.type] || '•'}</span>

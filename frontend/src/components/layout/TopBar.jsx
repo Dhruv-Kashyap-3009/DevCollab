@@ -8,10 +8,9 @@ export default function TopBar({ title }) {
   const handleLogout = () => { logout(); navigate('/login'); };
 
   return (
-    <header style={{
+    <header className="app-topbar" style={{
       height: '52px', display: 'flex', alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '0 24px',
       background: 'var(--surface)',
       borderBottom: '1px solid var(--border-subtle)',
       flexShrink: 0,
@@ -24,7 +23,7 @@ export default function TopBar({ title }) {
       {user && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Avatar name={user.name} size={28} />
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>{user.name}</span>
+          <span className="topbar-username" style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>{user.name}</span>
           <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
           <button
             onClick={handleLogout}

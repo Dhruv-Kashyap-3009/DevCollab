@@ -11,6 +11,23 @@ import Badge from '../components/ui/Badge';
 
 const langColor = { javascript: 'warning', typescript: 'primary', python: 'success', rust: 'danger', go: 'muted', css: 'purple' };
 
+const BackButton = ({ onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      background: 'none', border: 'none', color: 'var(--muted)',
+      cursor: 'pointer', fontSize: '13px', marginBottom: '20px',
+      display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font)',
+      padding: '6px 0', transition: 'color 0.15s ease',
+    }}
+    onMouseEnter={e => e.currentTarget.style.color = 'var(--text)'}
+    onMouseLeave={e => e.currentTarget.style.color = 'var(--muted)'}
+  >
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to snippets
+  </button>
+);
+
 export default function SnippetsPage() {
   const { projectId } = useParams();
   const [snippets, setSnippets] = useState([]);
@@ -78,27 +95,10 @@ export default function SnippetsPage() {
     }
   };
 
-  const BackButton = () => (
-    <button
-      onClick={() => setViewSnippet(null)}
-      style={{
-        background: 'none', border: 'none', color: 'var(--muted)',
-        cursor: 'pointer', fontSize: '13px', marginBottom: '20px',
-        display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font)',
-        padding: '6px 0', transition: 'color 0.15s ease',
-      }}
-      onMouseEnter={e => e.currentTarget.style.color = 'var(--text)'}
-      onMouseLeave={e => e.currentTarget.style.color = 'var(--muted)'}
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-      Back to snippets
-    </button>
-  );
-
   return (
     <div className="fade-in">
       {!viewSnippet && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div>
             <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em' }}>Snippets</h1>
             <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '3px' }}>Reusable code for your team</p>
@@ -115,7 +115,7 @@ export default function SnippetsPage() {
           <BackButton />
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
             {/* Snippet header */}
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div className="page-header" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
               <div>
                 <h2 style={{ fontSize: '16px', fontWeight: 600, letterSpacing: '-0.01em' }}>{viewSnippet.title}</h2>
                 {viewSnippet.description && <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '4px' }}>{viewSnippet.description}</p>}
@@ -143,7 +143,7 @@ export default function SnippetsPage() {
           </div>
         </div>
       ) : loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', gap: '14px' }}>
           <SkeletonList count={4} height="140px" />
         </div>
       ) : (

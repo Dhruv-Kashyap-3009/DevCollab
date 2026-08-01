@@ -44,13 +44,11 @@ export default function Sidebar() {
   });
 
   return (
-    <aside style={{
-      width: '220px', flexShrink: 0,
+    <aside className="app-sidebar" style={{
       background: 'var(--surface)',
       borderRight: '1px solid var(--border-subtle)',
       display: 'flex', flexDirection: 'column',
       padding: '16px 10px',
-      minHeight: '100vh',
     }}>
       {/* Logo */}
       <NavLink to="/" style={{
@@ -79,7 +77,7 @@ export default function Sidebar() {
       {projectId && (
         <>
           <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '12px 4px' }} />
-          <p style={{
+          <p className="sidebar-label" style={{
             fontSize: '10px', color: 'var(--muted)', padding: '0 12px',
             marginBottom: '4px', textTransform: 'uppercase',
             letterSpacing: '0.08em', fontWeight: 600,
@@ -108,7 +106,7 @@ export default function Sidebar() {
 
       {/* Bottom spacer */}
       <div style={{ flex: 1 }} />
-      <div style={{
+      <div className="sidebar-footer" style={{
         padding: '10px 12px',
         borderTop: '1px solid var(--border-subtle)',
         marginTop: '8px',

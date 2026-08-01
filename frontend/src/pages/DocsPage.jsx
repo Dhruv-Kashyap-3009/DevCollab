@@ -57,7 +57,7 @@ export default function DocsPage() {
   return (
     <div className="fade-in">
       {!selectedDoc && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div>
             <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em' }}>Docs</h1>
             <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '3px' }}>Project documentation</p>

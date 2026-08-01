@@ -33,7 +33,7 @@ export default function IssueForm({ onSubmit, loading, members = [], initial = {
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <Input label="Title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Issue title" required error={errors.title} />
       <Input label="Description" value={body} onChange={e => setBody(e.target.value)} placeholder="Describe the issue…" rows={4} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+      <div className="grid-2" style={{ gap: '12px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>Priority</label>
           <select value={priority} onChange={e => setPriority(e.target.value)} style={selectStyle}

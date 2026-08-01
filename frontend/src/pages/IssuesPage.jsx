@@ -25,14 +25,13 @@ export default function IssuesPage() {
   }, [projectId]);
 
   useEffect(() => {
-    setLoading(true);
     const params = {};
     if (filters.status) params.status = filters.status;
     if (filters.priority) params.priority = filters.priority;
     issuesApi.list(projectId, params)
       .then(res => { setIssues(res.data.issues); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [projectId, filters]);
+  }, [projectId, filters]); 
 
   useProjectSocket(projectId, {
     onIssueCreated: (issue) => setIssues(prev => [issue, ...prev]),
@@ -53,7 +52,7 @@ export default function IssuesPage() {
   return (
     <div className="fade-in">
       {!selectedIssue && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div>
             <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em' }}>Issues</h1>
             <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '3px' }}>

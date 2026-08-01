@@ -8,6 +8,7 @@ export default function useProjectSocket(projectId, { onIssueCreated, onIssueUpd
   const retryRef = useRef(0);
   const retryTimerRef = useRef(null);
   const mountedRef = useRef(true);
+  const connectRef = useRef(null);
 
   const connect = useCallback(() => {
     if (!projectId) return;
@@ -63,18 +64,23 @@ export default function useProjectSocket(projectId, { onIssueCreated, onIssueUpd
           default:
             break;
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       if (!mountedRef.current) return;
+      if (event.code === 4001) return; // auth rejected by server — retrying won't help
       const delay = Math.min(1000 * Math.pow(2, retryRef.current), 30000);
       retryRef.current += 1;
-      retryTimerRef.current = setTimeout(connect, delay);
+      retryTimerRef.current = setTimeout(() => connectRef.current(), delay);
     };
 
     ws.onerror = () => { ws.close(); };
   }, [projectId]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     mountedRef.current = true;
