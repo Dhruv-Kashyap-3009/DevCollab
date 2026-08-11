@@ -1,32 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
-import { githubApi } from '../../api/services';
+import { githubApi, userApi } from '../../api/services';
 import toast from 'react-hot-toast';
 
-export default function GitHubConnect({ projectId, onConnected }) {
-  const [repoOwner, setRepoOwner] = useState('');
-  const [repoName, setRepoName] = useState('');
-  const [token, setToken] = useState('');
+export default function GitHubConnect({ projectId, onConnected, onGoToSettings }) {
+  const [repo, setRepo] = useState('');
+  // null = still loading (derived, so no synchronous setState inside the effect)
+  const [repos, setRepos] = useState(null);
+  const [tokenError, setTokenError] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [showHelp, setShowHelp] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchRepos = () => {
+    userApi.githubRepos()
+      .then(res => setRepos(res.data.repos || []))
+      .catch(err => {
+        if (err.response?.status === 401 || err.response?.data?.code === 'TOKEN_INVALID') {
+          setTokenError(true);
+          setRepos([]);
+        } else if (err.response?.data?.code === 'NO_TOKEN') {
+          onGoToSettings();
+        } else {
+          setRepos([]);
+        }
+      });
+  };
+
+  useEffect(() => { fetchRepos(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refresh = () => {
+    setTokenError(false);
+    setRepos(null);
+    fetchRepos();
+  };
+
+  const loadingRepos = repos === null;
+  const repoList = repos || [];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const errs = {};
-    if (!repoOwner.trim()) errs.repoOwner = 'Owner is required';
-    if (!repoName.trim()) errs.repoName = 'Repo name is required';
-    if (!token.trim()) errs.token = 'Personal access token is required';
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    setErrors({});
+    if (!repo.trim()) { setError('Pick a repo or paste owner/repo'); return; }
+    setError('');
     setLoading(true);
     try {
-      const res = await githubApi.connect(projectId, { repo_owner: repoOwner.trim(), repo_name: repoName.trim(), access_token: token.trim() });
+      const res = await githubApi.connect(projectId, repo.trim());
       toast.success('GitHub connected!');
       onConnected(res.data);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to connect');
+      if (err.response?.data?.code === 'NO_TOKEN') {
+        onGoToSettings();
+      } else {
+        setError(err.response?.data?.message || 'Failed to connect');
+      }
     } finally { setLoading(false); }
   };
 
@@ -44,58 +70,64 @@ export default function GitHubConnect({ projectId, onConnected }) {
         <div>
           <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)', marginBottom: '4px' }}>Connect a GitHub Repository</div>
           <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            Link your repo to see commits, pull requests, and receive real-time webhook events.
+            Your token is saved. Pick a repo — commits and pull requests work immediately. For live webhook events, set up the webhook once in the Webhook Setup tab.
           </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div className="grid-2" style={{ gap: '12px' }}>
-          <Input label="Repository Owner" value={repoOwner} onChange={e => setRepoOwner(e.target.value)} placeholder="octocat" required error={errors.repoOwner} />
-          <Input label="Repository Name" value={repoName} onChange={e => setRepoName(e.target.value)} placeholder="my-project" required error={errors.repoName} />
+      {tokenError && (
+        <div style={{
+          background: 'var(--danger-dim)', border: '1px solid rgba(239,68,68,0.25)',
+          borderRadius: 'var(--radius-md)', padding: '14px 18px', marginBottom: '16px',
+          fontSize: '13px', color: 'var(--text)',
+        }}>
+          Your GitHub token is invalid or expired.{' '}
+          <button onClick={onGoToSettings} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--danger)', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)', fontSize: '13px' }}>
+            Update it in Settings
+          </button>
         </div>
-        <Input label="Personal Access Token" type="password" value={token} onChange={e => setToken(e.target.value)} placeholder="github_pat_xxxxxxxxxxxxxxxxxxxx" required error={errors.token} />
+      )}
 
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div>
+          <Input
+            label="Repository"
+            value={repo}
+            onChange={e => setRepo(e.target.value)}
+            placeholder="owner/name or https://github.com/owner/name"
+            list="gh-repos"
+            required
+            error={error || undefined}
+          />
+          <datalist id="gh-repos">
+            {repoList.map(r => <option key={r.full_name} value={r.full_name} />)}
+          </datalist>
+          <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '6px' }}>
+            {loadingRepos ? 'Loading your repos…' : `${repoList.length} repo${repoList.length !== 1 ? 's' : ''} available`}
+            {repoList.length > 0 && (
+              <button type="button" onClick={refresh} style={{ background: 'none', border: 'none', padding: 0, marginLeft: '10px', color: 'var(--primary)', cursor: 'pointer', fontFamily: 'var(--font)', fontSize: '12px' }}>
+                Refresh
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
           <button
             type="button"
-            onClick={() => setShowHelp(s => !s)}
+            onClick={onGoToSettings}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '6px',
-              fontSize: '12px', color: 'var(--primary)', padding: '2px 0',
+              fontSize: '12px', color: 'var(--muted)', padding: '2px 0',
               fontFamily: 'var(--font)',
             }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--muted)'}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: showHelp ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }}>
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-            How do I get a token?
+            Manage token in Settings →
           </button>
-
-          {showHelp && (
-            <ol style={{
-              background: 'var(--surface2)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)', padding: '14px 16px 14px 32px',
-              marginTop: '8px', fontSize: '12px', color: 'var(--muted)',
-              lineHeight: 1.9,
-            }}>
-              <li>Go to <strong style={{ color: 'var(--text-secondary)' }}>GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens</strong></li>
-              <li>Click <strong style={{ color: 'var(--text-secondary)' }}>Generate new token</strong></li>
-              <li>Under <strong style={{ color: 'var(--text-secondary)' }}>Repository access</strong>, choose "Only select repositories" and pick the repo you want to connect</li>
-              <li>Under <strong style={{ color: 'var(--text-secondary)' }}>Permissions</strong>, set{' '}
-                <code style={{ background: 'var(--surface3)', padding: '1px 5px', borderRadius: '4px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--primary)' }}>Contents</code>{' '}
-                to Read and write, and{' '}
-                <code style={{ background: 'var(--surface3)', padding: '1px 5px', borderRadius: '4px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--primary)' }}>Pull requests</code>{' '}
-                to Read-only
-              </li>
-              <li>Click <strong style={{ color: 'var(--text-secondary)' }}>Generate token</strong> and copy it immediately — GitHub only shows it once</li>
-              <li>Paste the repository owner, name, and token above</li>
-            </ol>
-          )}
+          <Button type="submit" loading={loading}>Connect repository</Button>
         </div>
-
-        <Button type="submit" loading={loading} style={{ width: '100%' }}>Connect repository</Button>
       </form>
     </div>
   );

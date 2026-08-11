@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { projectsApi, activityApi } from '../api/services';
 import useProjectSocket from '../hooks/useProjectSocket';
 import Avatar from '../components/ui/Avatar';
@@ -87,6 +87,14 @@ export default function ProjectPage() {
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  // The project payload from getProject already carries myRole — derive the
+  // gates from it instead of fetching the project a second time.
+  const myRole = project?.myRole;
+  const canEdit = myRole === 'editor' || myRole === 'owner';
+  const isOwner = myRole === 'owner';
 
   useEffect(() => {
     Promise.all([
@@ -101,6 +109,7 @@ export default function ProjectPage() {
   }, [projectId]);
 
   useProjectSocket(projectId, {
+    onPresenceSnapshot: (msg) => setOnlineMembers(msg.members || []),
     onUserOnline: (msg) => setOnlineMembers(prev => prev.find(m => m.userId === msg.userId) ? prev : [...prev, { userId: msg.userId, userName: msg.userName }]),
     onUserOffline: (msg) => setOnlineMembers(prev => prev.filter(m => m.userId !== msg.userId)),
   });
@@ -126,8 +135,23 @@ export default function ProjectPage() {
       setProject(res.data.project);
       setShowEditModal(false);
       toast.success('Project updated');
-    } catch { toast.error('Failed to update'); }
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to update'); }
     finally { setSaving(false); }
+  };
+
+  const navigate = useNavigate();
+  const confirmDelete = async (e) => {
+    e.preventDefault();
+    if (deleteConfirm.trim() !== project.name) return;
+    setDeleting(true);
+    try {
+      await projectsApi.delete(projectId);
+      toast.success('Project deleted');
+      navigate('/');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete project');
+      setDeleting(false);
+    }
   };
 
   if (loading) return <SkeletonList count={6} height="60px" />;
@@ -156,10 +180,20 @@ export default function ProjectPage() {
             </div>
             {project.description && <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '6px' }}>{project.description}</p>}
           </div>
-          <Button variant="ghost" size="sm" onClick={() => { setEditName(project.name); setEditDesc(project.description); setShowEditModal(true); }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-            Edit
-          </Button>
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            {canEdit && (
+              <Button variant="ghost" size="sm" onClick={() => { setEditName(project.name); setEditDesc(project.description); setShowEditModal(true); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                Edit
+              </Button>
+            )}
+            {isOwner && (
+              <Button variant="danger" size="sm" onClick={() => { setDeleteConfirm(''); setShowDeleteModal(true); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                Delete
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Stats */}
@@ -242,20 +276,22 @@ export default function ProjectPage() {
           </div>
         </div>
 
-        {/* Invite */}
-        <div className="rail-card">
-          <h3>Invite member</h3>
-          <form onSubmit={sendInvite} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="colleague@example.com" type="email" />
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
-                <option value="viewer">Viewer</option>
-                <option value="editor">Editor</option>
-              </select>
-              <Button type="submit" loading={inviting} size="sm">Send invite</Button>
-            </div>
-          </form>
-        </div>
+        {/* Invite — owners only (the API enforces this too) */}
+        {isOwner && (
+          <div className="rail-card">
+            <h3>Invite member</h3>
+            <form onSubmit={sendInvite} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="colleague@example.com" type="email" />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+                  <option value="viewer">Viewer</option>
+                  <option value="editor">Editor</option>
+                </select>
+                <Button type="submit" loading={inviting} size="sm">Send invite</Button>
+              </div>
+            </form>
+          </div>
+        )}
       </aside>
 
       <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit project">
@@ -263,6 +299,25 @@ export default function ProjectPage() {
           <Input label="Name" value={editName} onChange={e => setEditName(e.target.value)} required />
           <Input label="Description" value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={3} />
           <Button type="submit" loading={saving} style={{ width: '100%' }}>Save changes</Button>
+        </form>
+      </Modal>
+
+      <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Delete project" width="440px">
+        <form onSubmit={confirmDelete} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            This permanently deletes <strong style={{ color: 'var(--text)' }}>{project.name}</strong> and everything in it — issues, snippets, docs, GitHub connection, invites, and activity. This can't be undone.
+          </div>
+          <Input
+            label={`Type “${project.name}” to confirm`}
+            value={deleteConfirm}
+            onChange={e => setDeleteConfirm(e.target.value)}
+            placeholder={project.name}
+            autoFocus
+          />
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Button type="button" variant="ghost" onClick={() => setShowDeleteModal(false)} style={{ flex: 1 }}>Cancel</Button>
+            <Button type="submit" variant="danger" disabled={deleteConfirm.trim() !== project.name} loading={deleting} style={{ flex: 1 }}>Delete project</Button>
+          </div>
         </form>
       </Modal>
     </div>

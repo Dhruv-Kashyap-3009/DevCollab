@@ -42,34 +42,47 @@ const createIssue = async (req, res, next) => {
     if (!errors.isEmpty()) return res.status(400).json({ message: errors.array()[0].msg });
 
     const { title, body, status, priority, labels, assignee_id } = req.body;
-    const number = await getNextIssueNumber(req.params.id);
 
-    const issue = await Issue.create({
-      project_id: req.params.id,
-      number,
-      title,
-      body: body || '',
-      status: status || 'open',
-      priority: priority || 'medium',
-      labels: labels || [],
-      author_id: req.user._id,
-      assignee_id: assignee_id || null,
-    });
+    // The number is read-then-inserted against a unique (project, number) index,
+    // so N concurrent creates can race onto the same number. Retry on the
+    // duplicate-key error — the next read gets the freshly-inserted number.
+    // Each retry cycle resolves at least one contender (the insert winner), so
+    // the worst case needs ~N attempts for N parallel creates; 20 is safe.
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const number = await getNextIssueNumber(req.params.id);
+      try {
+        const issue = await Issue.create({
+          project_id: req.params.id,
+          number,
+          title,
+          body: body || '',
+          status: status || 'open',
+          priority: priority || 'medium',
+          labels: labels || [],
+          author_id: req.user._id,
+          assignee_id: assignee_id || null,
+        });
 
-    const populated = await issue.populate([
-      { path: 'author_id', select: 'name email avatar_url' },
-      { path: 'assignee_id', select: 'name email avatar_url' },
-    ]);
+        const populated = await issue.populate([
+          { path: 'author_id', select: 'name email avatar_url' },
+          { path: 'assignee_id', select: 'name email avatar_url' },
+        ]);
 
-    await logActivity({
-      project_id: req.params.id,
-      user_id: req.user._id,
-      type: 'issue_created',
-      payload: { issueNumber: number, title },
-    });
+        await logActivity({
+          project_id: req.params.id,
+          user_id: req.user._id,
+          type: 'issue_created',
+          payload: { issueNumber: number, title },
+        });
 
-    broadcastToProject(req.params.id, { type: 'ISSUE_CREATED', issue: populated });
-    res.status(201).json({ issue: populated });
+        broadcastToProject(req.params.id, { type: 'ISSUE_CREATED', issue: populated });
+        return res.status(201).json({ issue: populated });
+      } catch (err) {
+        if (err.code === 11000) continue; // number collision — retry with the next number
+        throw err;
+      }
+    }
+    return res.status(409).json({ message: 'Too many issues created at once, please retry' });
   } catch (err) {
     next(err);
   }
@@ -104,7 +117,10 @@ const updateIssue = async (req, res, next) => {
       { _id: req.params.issueId, project_id: req.params.id },
       update,
       { new: true, runValidators: true }
-    ).populate('author_id', 'name email avatar_url').populate('assignee_id', 'name email avatar_url');
+    )
+      .populate('author_id', 'name email avatar_url')
+      .populate('assignee_id', 'name email avatar_url')
+      .populate('comments.author_id', 'name email avatar_url');
 
     if (!issue) return res.status(404).json({ message: 'Issue not found' });
 
@@ -122,6 +138,8 @@ const deleteIssue = async (req, res, next) => {
   try {
     const issue = await Issue.findOneAndDelete({ _id: req.params.issueId, project_id: req.params.id });
     if (!issue) return res.status(404).json({ message: 'Issue not found' });
+    await logActivity({ project_id: req.params.id, user_id: req.user._id, type: 'issue_deleted', payload: { issueNumber: issue.number, title: issue.title } });
+    broadcastToProject(req.params.id, { type: 'ISSUE_DELETED', issueId: req.params.issueId });
     res.json({ message: 'Issue deleted' });
   } catch (err) {
     next(err);

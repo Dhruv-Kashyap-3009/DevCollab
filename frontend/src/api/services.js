@@ -4,6 +4,7 @@ export const authApi = {
   register: (data) => client.post('/auth/register', data),
   login: (data) => client.post('/auth/login', data),
   refresh: (refreshToken) => client.post('/auth/refresh', { refreshToken }),
+  logout: () => client.post('/auth/logout'),
   me: () => client.get('/auth/me'),
 };
 
@@ -44,12 +45,22 @@ export const docsApi = {
 };
 
 export const githubApi = {
-  connect: (projectId, data) => client.post(`/projects/${projectId}/github/connect`, data),
+  // repo is "owner/name" or a full GitHub URL; the token comes from the user's Settings.
+  connect: (projectId, repo) => client.post(`/projects/${projectId}/github/connect`, { repo }),
   disconnect: (projectId) => client.delete(`/projects/${projectId}/github/disconnect`),
   status: (projectId) => client.get(`/projects/${projectId}/github/status`),
   commits: (projectId) => client.get(`/projects/${projectId}/github/commits`),
   pulls: (projectId) => client.get(`/projects/${projectId}/github/pulls`),
   branches: (projectId) => client.get(`/projects/${projectId}/github/branches`),
+};
+
+export const userApi = {
+  githubToken: {
+    get: () => client.get('/user/github-token'),
+    save: (token) => client.put('/user/github-token', { token }),
+    remove: () => client.delete('/user/github-token'),
+  },
+  githubRepos: () => client.get('/user/github/repos'),
 };
 
 export const activityApi = {

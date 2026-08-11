@@ -11,6 +11,7 @@ import SnippetsPage from './pages/SnippetsPage';
 import DocsPage from './pages/DocsPage';
 import GitHubPage from './pages/GitHubPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
+import SettingsPage from './pages/SettingsPage';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuthStore();
@@ -50,6 +51,10 @@ export default function App() {
           <Route path="snippets" element={<SnippetsPage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="github" element={<GitHubPage />} />
+        </Route>
+
+        <Route path="/settings" element={<RequireAuth><AppLayout /></RequireAuth>}>
+          <Route index element={<SettingsPage />} />
         </Route>
 
         <Route path="/invite/:token/accept" element={

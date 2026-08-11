@@ -9,7 +9,7 @@ A full-stack developer collaboration platform that brings together issue trackin
 - **Authentication** — Register, login, JWT-based access with refresh token rotation
 - **Project Management** — Create projects, invite team members via email, manage roles (Owner / Editor / Viewer)
 - **Issue Tracker** — Create, assign, filter, and comment on issues with real-time updates
-- **Code Snippets** — Save and share reusable code snippets with syntax highlighting across your team
+- **Code Snippets** — Save and share reusable code snippets across your team
 - **Docs** — Write and auto-save project documentation with a built-in editor
 - **GitHub Integration** — Connect a GitHub repository to view commits, pull requests, branches, and receive webhook events
 - **Real-time Presence** — See which team members are online via WebSocket
@@ -203,6 +203,65 @@ The app will be running at `http://localhost:5173`
 
 ---
 
+## Deployment
+
+DevCollab is designed to run as **one server**: the backend serves the API, the WebSocket, **and** the built frontend from the same origin, so no CORS or proxy configuration is needed.
+
+### 1. Build the frontend
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+This creates `frontend/dist`.
+
+### 2. Configure production environment
+
+In `backend/.env`, set the real values:
+
+```dotenv
+PORT=3000
+MONGO_URI=mongodb+srv://...
+JWT_SECRET=<long random string, 32+ chars>
+JWT_REFRESH_SECRET=<different long random string, 32+ chars>
+CLIENT_URL=https://your-domain.com
+ENCRYPTION_KEY=<exactly 32 characters>
+EMAIL_USER=your_gmail@gmail.com
+EMAIL_PASS=your_16_char_gmail_app_password
+```
+
+> Generate the secrets with `openssl rand -base64 48` (for JWT) and `openssl rand -hex 16` (for the 32-char `ENCRYPTION_KEY`).
+
+### 3. Start the server
+
+```bash
+cd backend
+npm install
+npm start
+```
+
+That's it — `https://your-domain.com` now serves the app, the API (under `/api`), and the WebSocket (under `/ws`) together. The backend detects `frontend/dist` and serves it automatically, including deep-link fallback (e.g. `/projects/xyz` refreshes correctly).
+
+### Behind a reverse proxy (nginx / Caddy)
+
+- Forward `/` (static + SPA fallback), `/api` (HTTP), and `/ws` with `Upgrade` headers (WebSocket).
+- Example nginx location for the socket:
+
+```nginx
+location /ws {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+> **Hosting separately?** If you deploy the frontend on a static host (Vercel/Netlify), keep the API and WebSocket on the same domain as the frontend (e.g. via a subdomain or proxy) — the app uses relative `/api` and same-origin WebSocket by design, and `CLIENT_URL` must match the frontend origin for invite links.
+
+---
+
 ## API Overview
 
 ### Auth
@@ -284,7 +343,7 @@ The backend broadcasts real-time events to all connected project members:
 | Action | Owner | Editor | Viewer |
 |---|---|---|---|
 | View project | ✅ | ✅ | ✅ |
-| Create issues / snippets / docs | ✅ | ✅ | ✅ |
+| Create issues / snippets / docs | ✅ | ✅ | ❌ |
 | Update issues / snippets / docs | ✅ | ✅ | ❌ |
 | Delete issues / snippets / docs | ✅ | ✅ | ❌ |
 | Invite members | ✅ | ❌ | ❌ |

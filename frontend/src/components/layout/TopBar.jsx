@@ -5,6 +5,7 @@ import Avatar from '../ui/Avatar';
 const SUB_PAGE_TITLES = { issues: 'Issues', snippets: 'Snippets', docs: 'Docs', github: 'GitHub' };
 
 function pageTitle(pathname) {
+  if (pathname === '/settings') return 'Settings';
   const [, root, , sub] = pathname.split('/');
   if (root === 'projects') return SUB_PAGE_TITLES[sub] || 'Overview';
   return 'Dashboard';
@@ -36,6 +37,26 @@ export default function TopBar() {
 
       {user && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={() => navigate('/settings')}
+            title="Settings"
+            aria-label="Settings"
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: '28px', height: '28px',
+              background: 'none', border: 'none',
+              color: 'var(--muted)', cursor: 'pointer',
+              borderRadius: 'var(--radius-sm)',
+              transition: 'background 0.15s ease, color 0.15s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'var(--surface2)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'none'; }}
+          >
+            <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
           <Avatar name={user.name} size={28} />
           <span className="topbar-username" style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>{user.name}</span>
           <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />

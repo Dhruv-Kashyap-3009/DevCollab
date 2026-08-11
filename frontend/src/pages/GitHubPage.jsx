@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { githubApi } from '../api/services';
+import { useParams, useNavigate } from 'react-router-dom';
+import { githubApi, userApi } from '../api/services';
 import GitHubConnect from '../components/github/GitHubConnect';
 import GitHubStatus from '../components/github/GitHubStatus';
+import Button from '../components/ui/Button';
 import CommitList from '../components/github/CommitList';
 import PullRequestList from '../components/github/PullRequestList';
 import WebhookSetup from '../components/github/WebhookSetup';
@@ -14,9 +15,12 @@ const TABS = ['Overview', 'Commits', 'Pull Requests', 'Webhook Setup'];
 
 export default function GitHubPage() {
   const { projectId } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('Overview');
   const [status, setStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
+  const [hasToken, setHasToken] = useState(false);
+  const [tokenLoading, setTokenLoading] = useState(true);
   const [commits, setCommits] = useState([]);
   const [loadingCommits, setLoadingCommits] = useState(true);
   const [pulls, setPulls] = useState([]);
@@ -24,15 +28,24 @@ export default function GitHubPage() {
   const [branches, setBranches] = useState([]);
   const [webhookData, setWebhookData] = useState({ url: '', secret: '' });
   const [recentEvents, setRecentEvents] = useState([]);
-  const myRole = useMyRole(projectId);
+  const { myRole } = useMyRole(projectId);
   const canManage = myRole === 'owner';
 
   useEffect(() => {
-    githubApi.status(projectId).then(res => {
-      setStatus(res.data);
+    Promise.all([
+      githubApi.status(projectId),
+      userApi.githubToken.get().catch(() => ({ data: { hasToken: false } })),
+    ]).then(([statusRes, tokenRes]) => {
+      setStatus(statusRes.data);
+      setHasToken(!!tokenRes.data.hasToken);
       setLoadingStatus(false);
-    }).catch(() => setLoadingStatus(false));
+      setTokenLoading(false);
+    }).catch(() => { setLoadingStatus(false); setTokenLoading(false); });
   }, [projectId]);
+
+  const goToTokenSettings = () => {
+    navigate('/settings?return=' + encodeURIComponent('/projects/' + projectId + '/github'));
+  };
 
   useEffect(() => {
     if (!status?.connected) return;
@@ -119,7 +132,23 @@ export default function GitHubPage() {
         status?.connected
           ? <GitHubStatus status={status} branches={branches} onDisconnect={handleDisconnect} canManage={canManage} />
           : canManage
-            ? <GitHubConnect projectId={projectId} onConnected={handleConnected} />
+            ? (tokenLoading
+                ? <div style={{ color: 'var(--muted)', fontSize: '13px', padding: '40px', textAlign: 'center', background: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>Loading…</div>
+                : hasToken
+                  ? <GitHubConnect projectId={projectId} onConnected={handleConnected} onGoToSettings={goToTokenSettings} />
+                  : (
+                    <div style={{
+                      maxWidth: '480px', background: 'var(--primary-dim)',
+                      border: '1px solid rgba(59,130,246,0.2)',
+                      borderRadius: 'var(--radius-md)', padding: '20px 24px',
+                    }}>
+                      <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)', marginBottom: '6px' }}>Connect your GitHub account</div>
+                      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '16px' }}>
+                        Add your GitHub token once in Settings — then every project connect is just picking a repo, no token to paste.
+                      </p>
+                      <Button onClick={goToTokenSettings}>Add GitHub token</Button>
+                    </div>
+                  ))
             : <div style={{ color: 'var(--muted)', fontSize: '13px', padding: '40px', textAlign: 'center', background: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>Only project owners can connect a GitHub repository.</div>
       )}
 

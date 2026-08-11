@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const Snippet = require('../models/Snippet');
 const { logActivity } = require('../services/activityService');
 const GithubIntegration = require('../models/GithubIntegration');
+const { resolveIntegrationToken } = require('./githubController');
 
 function sanitizePath(rawPath) {
   const cleaned = (rawPath || '').replace(/^\/+/, '').trim();
@@ -117,7 +118,10 @@ const pushSnippetToGitHub = async (req, res, next) => {
     const integration = await GithubIntegration.findOne({ project_id: req.params.id });
     if (!integration) return res.status(400).json({ message: 'GitHub is not connected for this project' });
 
-    const token = integration.getAccessToken();
+    // The token lives on the user now — resolve it there first, falling back
+    // to a legacy token stored on the integration itself.
+    const token = await resolveIntegrationToken(integration, req.user._id);
+    if (!token) return res.status(400).json({ code: 'NO_TOKEN', message: 'No GitHub token — add one in Settings' });
     const branch = (req.body && req.body.branch) || 'main';
     const ext = EXT_MAP[snippet.language] || 'txt';
     let path;

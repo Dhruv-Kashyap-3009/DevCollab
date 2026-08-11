@@ -1,4 +1,7 @@
 // DevCollab backend integration test — drives the live API on :3000.
+// Load the same .env the server uses so the test process shares its secrets
+// (ENCRYPTION_KEY for encrypted tokens, MONGO_URI, etc.).
+require('dotenv').config();
 const BASE = 'http://localhost:3000';
 let passed = 0, failed = 0;
 const failures = [];
@@ -66,6 +69,22 @@ async function main() {
   r = await req('POST', '/api/auth/refresh', { body: { refreshToken: 'bogus' } });
   ok(r.status === 401, 'bogus refresh token -> 401');
 
+  // logout revocation: after logout, every previously-issued refresh token dies
+  console.log('\n— logout revocation —');
+  const emailE = 'testE_' + ts + '@devcollab.dev';
+  r = await req('POST', '/api/auth/register', { body: { name: 'Test Echo', email: emailE, password: 'password111' } });
+  ok(r.status === 201 && r.json.accessToken, 'register user E (logout test)');
+  const tokensE = r.json;
+  r = await req('POST', '/api/auth/refresh', { body: { refreshToken: tokensE.refreshToken } });
+  ok(r.status === 200 && r.json.refreshToken, 'refresh works before logout');
+  const rotatedE = r.json.refreshToken;
+  r = await req('POST', '/api/auth/logout', { token: tokensE.accessToken });
+  ok(r.status === 200, 'logout succeeds');
+  r = await req('POST', '/api/auth/refresh', { body: { refreshToken: tokensE.refreshToken } });
+  ok(r.status === 401, 'refresh token issued before logout is revoked -> 401', 'got ' + r.status);
+  r = await req('POST', '/api/auth/refresh', { body: { refreshToken: rotatedE } });
+  ok(r.status === 401, 'rotated refresh token also revoked after logout -> 401', 'got ' + r.status);
+
   // 5. projects
   console.log('\n— projects —');
   r = await req('POST', '/api/projects', { token: tokensA.accessToken, body: { name: '' } });
@@ -74,6 +93,12 @@ async function main() {
   ok(r.status === 201 && r.json.project._id, 'create project', 'got ' + r.status);
   const project = r.json.project;
   const pid = project._id;
+  r = await req('PATCH', '/api/projects/' + pid, { token: tokensA.accessToken, body: { name: '   ' } });
+  ok(r.status === 400, 'update project with blank name -> 400 (not silently ignored)', 'got ' + r.status);
+  r = await req('PATCH', '/api/projects/' + pid, { token: tokensA.accessToken, body: { name: '  Renamed  ' } });
+  ok(r.status === 200 && r.json.project.name === 'Renamed', 'update project trims name');
+  r = await req('PATCH', '/api/projects/' + pid, { token: tokensA.accessToken, body: { name: 'Integration Project ' + ts } });
+  ok(r.status === 200, 'update project restores original name');
   r = await req('GET', '/api/projects', { token: tokensA.accessToken });
   ok(r.status === 200 && r.json.projects.some(p => p._id === pid), 'list projects contains the new project');
   r = await req('GET', '/api/projects/' + pid, { token: tokensA.accessToken });
@@ -101,12 +126,22 @@ async function main() {
   ok(r.status === 200 && r.json.issues.length === 0, 'filter status=closed -> 0');
   r = await req('GET', '/api/projects/' + pid + '/issues?priority=high', { token: tokensA.accessToken });
   ok(r.status === 200 && r.json.issues.length === 1, 'filter priority=high -> 1');
+  r = await req('GET', '/api/projects/' + pid + '/issues?label=nope', { token: tokensA.accessToken });
+  ok(r.status === 200 && r.json.issues.length === 0, 'filter by unknown label -> 0');
+  r = await req('GET', '/api/projects/' + pid + '/issues?page=1&limit=1', { token: tokensA.accessToken });
+  ok(r.status === 200 && r.json.total >= 1 && r.json.pages >= 1 && r.json.issues.length === 1, 'issues pagination returns total/page/pages metadata', JSON.stringify({ total: r.json.total, pages: r.json.pages, got: r.json.issues.length }));
   r = await req('PATCH', '/api/projects/' + pid + '/issues/' + issue1._id, { token: tokensA.accessToken, body: { status: 'in_progress' } });
   ok(r.status === 200 && r.json.issue.status === 'in_progress', 'update issue status -> in_progress');
   r = await req('POST', '/api/projects/' + pid + '/issues/' + issue1._id + '/comments', { token: tokensA.accessToken, body: { body: 'Reproduced on staging' } });
   ok(r.status === 201 && r.json.comment, 'add comment to issue');
   r = await req('GET', '/api/projects/' + pid + '/issues/' + issue1._id, { token: tokensA.accessToken });
   ok(r.status === 200 && (r.json.issue.comments || []).length >= 1, 'issue detail includes the comment');
+  // The update path must keep comment authors populated — previously updateIssue
+  // returned raw ObjectIds, so the UI rendered every comment author as "Unknown"
+  // after closing/reopening an issue.
+  r = await req('PATCH', '/api/projects/' + pid + '/issues/' + issue1._id, { token: tokensA.accessToken, body: { status: 'closed' } });
+  const updComment = (r.json.issue.comments || [])[0];
+  ok(updComment && typeof updComment.author_id === 'object' && updComment.author_id.name, 'updated issue keeps comment authors populated', JSON.stringify(updComment && updComment.author_id));
   r = await req('GET', '/api/projects/' + pid + '/issues/000000000000000000000000', { token: tokensA.accessToken });
   ok(r.status === 404, 'get unknown issue -> 404');
 
@@ -133,6 +168,7 @@ async function main() {
   const doc = r.json.doc;
   r = await req('PATCH', '/api/projects/' + pid + '/docs/' + doc._id, { token: tokensA.accessToken, body: { content: '# Setup v2\nRun `npm i && npm run dev`.' } });
   ok(r.status === 200 && r.json.doc.content.includes('v2'), 'update doc content');
+  ok(r.json.doc.last_edited_by && r.json.doc.last_edited_by.name === 'Test Alpha', 'doc records last_edited_by', JSON.stringify(r.json.doc.last_edited_by && r.json.doc.last_edited_by.name));
   r = await req('GET', '/api/projects/' + pid + '/docs', { token: tokensA.accessToken });
   ok(r.status === 200 && r.json.docs.length === 1, 'list docs -> 1');
   r = await req('GET', '/api/projects/' + pid + '/docs/' + doc._id, { token: tokensA.accessToken });
@@ -189,7 +225,7 @@ async function main() {
   ok(r.status === 403, 'viewer cannot update doc -> 403', 'got ' + r.status);
   r = await req('DELETE', '/api/projects/' + pid + '/docs/' + doc._id, { token: tokensB.accessToken });
   ok(r.status === 403, 'viewer cannot delete doc -> 403', 'got ' + r.status);
-  r = await req('POST', '/api/projects/' + pid + '/github/connect', { token: tokensB.accessToken, body: { repo_owner: 'o', repo_name: 'r', access_token: 't' } });
+  r = await req('POST', '/api/projects/' + pid + '/github/connect', { token: tokensB.accessToken, body: { repo: 'o/r' } });
   ok(r.status === 403, 'viewer cannot connect github -> 403', 'got ' + r.status);
   r = await req('GET', '/api/projects/' + pid + '/github/status', { token: tokensB.accessToken });
   ok(r.status === 200, 'viewer can still read github status');
@@ -229,17 +265,218 @@ async function main() {
   ok(r.status === 403, 'editor cannot invite -> 403');
   r = await req('DELETE', '/api/projects/' + pid, { token: tokensC.accessToken });
   ok(r.status === 403, 'editor cannot delete project -> 403');
-  r = await req('POST', '/api/projects/' + pid + '/github/connect', { token: tokensC.accessToken, body: { repo_owner: 'o', repo_name: 'r', access_token: 't' } });
+  r = await req('POST', '/api/projects/' + pid + '/github/connect', { token: tokensC.accessToken, body: { repo: 'o/r' } });
   ok(r.status === 403, 'editor cannot connect github -> 403');
   r = await req('DELETE', '/api/projects/' + pid + '/github/disconnect', { token: tokensC.accessToken });
   ok(r.status === 403, 'editor cannot disconnect github -> 403');
 
-  // 11. github integration error paths
+  // 10b. websocket authorization
+  console.log('\n— websocket authorization —');
+  const WebSocket = require('ws');
+  const wsConn = (token) => new Promise((resolve) => {
+    const ws = new WebSocket('ws://localhost:3000/ws');
+    const timer = setTimeout(() => resolve({ timedout: true }), 4000);
+    ws.on('open', () => ws.send(JSON.stringify({ type: 'AUTH', token, projectId: pid })));
+    ws.on('message', (d) => { clearTimeout(timer); resolve({ msg: JSON.parse(d.toString()) }); ws.close(); });
+    ws.on('close', (code, reason) => { clearTimeout(timer); resolve({ code, reason: reason.toString() }); });
+    ws.on('error', () => {});
+  });
+  // Collects messages until it sees the given type (or a close / timeout).
+  const wsUntil = (token, wantType) => new Promise((resolve) => {
+    const ws = new WebSocket('ws://localhost:3000/ws');
+    const seen = [];
+    const timer = setTimeout(() => { try { ws.close(); } catch {} resolve({ timedout: true, seen }); }, 4000);
+    ws.on('open', () => ws.send(JSON.stringify({ type: 'AUTH', token, projectId: pid })));
+    ws.on('message', (d) => {
+      const msg = JSON.parse(d.toString());
+      seen.push(msg);
+      if (msg.type === wantType) { clearTimeout(timer); try { ws.close(); } catch {} resolve({ msg, seen }); }
+    });
+    ws.on('close', (code, reason) => { clearTimeout(timer); resolve({ code, reason: reason.toString(), seen }); });
+    ws.on('error', () => {});
+  });
+  r = await req('POST', '/api/auth/register', { body: { name: 'Test Delta', email: 'testD_' + ts + '@devcollab.dev', password: 'password000' } });
+  ok(r.status === 201 && r.json.accessToken, 'register user D (non-member)');
+  const tokensD = r.json;
+  let wsRes = await wsConn(tokensD.accessToken);
+  ok(wsRes.code === 4001, 'non-member socket rejected with 4001', JSON.stringify(wsRes).slice(0, 80));
+  wsRes = await wsConn(tokensB.accessToken);
+  ok(wsRes.msg && wsRes.msg.type === 'CONNECTED', 'member socket receives CONNECTED', JSON.stringify(wsRes).slice(0, 80));
+  wsRes = await wsConn(tokensD.accessToken);
+  ok(wsRes.code === 4001, 'non-member socket still rejected after member connects', JSON.stringify(wsRes).slice(0, 80));
+
+  // a client that connects and immediately closes must leave no presence trace
+  // (regression: the async connection handler could attach the close listener
+  // too late and strand a dead socket in the room forever)
+  const quickWs = new WebSocket('ws://localhost:3000/ws');
+  quickWs.on('error', () => {}); // closing a still-connecting socket emits an error
+  try { quickWs.close(); } catch {}
+  await new Promise(r => setTimeout(r, 800));
+  const roomAfterQuickClose = await wsUntil(tokensC.accessToken, 'PRESENCE_SNAPSHOT');
+  ok(Array.isArray(roomAfterQuickClose.msg && roomAfterQuickClose.msg.members) &&
+    !roomAfterQuickClose.msg.members.some(m => m.userId === (tokensB.user && tokensB.user._id)),
+    'quick connect+close leaves no presence trace', JSON.stringify(roomAfterQuickClose.msg && roomAfterQuickClose.msg.members).slice(0, 80));
+
+  // presence snapshot: the joining member is told who's already online (excluding self)
+  // Keep B connected while C joins so the snapshot has someone to list.
+  const bWs = new WebSocket('ws://localhost:3000/ws');
+  // Wait until B is fully authenticated and joined (CONNECTED) so C's snapshot
+  // is guaranteed to list B — auth is now async after the open handshake.
+  await new Promise((resolve) => {
+    bWs.on('open', () => bWs.send(JSON.stringify({ type: 'AUTH', token: tokensB.accessToken, projectId: pid })));
+    bWs.on('message', (d) => { if (JSON.parse(d.toString()).type === 'CONNECTED') resolve(); });
+    bWs.on('error', resolve);
+    setTimeout(resolve, 4000);
+  });
+  const snap = await wsUntil(tokensC.accessToken, 'PRESENCE_SNAPSHOT');
+  try { bWs.close(); } catch {}
+  ok(snap.msg && Array.isArray(snap.msg.members), 'member receives PRESENCE_SNAPSHOT with a members array', JSON.stringify(snap.msg || snap).slice(0, 80));
+  ok(snap.msg.members.some(m => m.userId && m.userName), 'snapshot lists the already-connected member (B)', JSON.stringify(snap.msg.members).slice(0, 100));
+  ok(!snap.msg.members.some(m => m.userId === (tokensC.user && tokensC.user._id)), 'snapshot excludes the joining member themselves', 'self=' + (tokensC.user && tokensC.user._id) + ' listed=' + JSON.stringify(snap.msg.members));
+
+  // heartbeat: an authed member's PING is answered with a PONG
+  const hbWs = await new Promise((resolve) => {
+    const ws = new WebSocket('ws://localhost:3000/ws');
+    const t = setTimeout(() => { try { ws.close(); } catch {} resolve({ timedout: true }); }, 4000);
+    ws.on('open', () => ws.send(JSON.stringify({ type: 'AUTH', token: tokensB.accessToken, projectId: pid })));
+    ws.on('message', (d) => {
+      const m = JSON.parse(d.toString());
+      if (m.type === 'CONNECTED') { ws.send(JSON.stringify({ type: 'PING' })); return; }
+      if (m.type === 'PONG') { clearTimeout(t); try { ws.close(); } catch {} resolve({ pong: true }); }
+    });
+    ws.on('error', () => {});
+  });
+  ok(hbWs.pong === true, 'authed member PING -> PONG heartbeat', JSON.stringify(hbWs).slice(0, 80));
+
+  // 10c. concurrent issue creation must not collide on issue numbers
+  console.log('\n— concurrent issue creation —');
+  const parallelCreates = await Promise.all(Array.from({ length: 8 }, (_, i) =>
+    req('POST', '/api/projects/' + pid + '/issues', { token: tokensA.accessToken, body: { title: 'Parallel ' + i } })
+  ));
+  ok(parallelCreates.every(x => x.status === 201), '8 concurrent issue creates all succeed', parallelCreates.map(x => x.status).join(','));
+  const parallelNums = parallelCreates.map(x => x.json.issue && x.json.issue.number).sort((a, b) => a - b);
+  ok(new Set(parallelNums).size === 8, 'concurrent creates get unique numbers', 'nums=' + parallelNums.join(','));
+
+  // 10d. issue deletion broadcasts to other clients
+  const deleteTarget = parallelCreates[0].json.issue;
+  const delWs = await new Promise((resolve, reject) => {
+    const ws = new WebSocket('ws://localhost:3000/ws');
+    const t = setTimeout(() => reject(new Error('ws timeout')), 4000);
+    ws.on('message', (d) => {
+      const m = JSON.parse(d);
+      if (m.type === 'ISSUE_DELETED' && m.issueId === deleteTarget._id) { clearTimeout(t); resolve(m); try { ws.close(); } catch {} }
+    });
+    ws.on('open', () => { ws.send(JSON.stringify({ type: 'AUTH', token: tokensB.accessToken, projectId: pid })); setTimeout(() => {
+      req('DELETE', '/api/projects/' + pid + '/issues/' + deleteTarget._id, { token: tokensA.accessToken }).then(r => {
+        if (r.status !== 200) { clearTimeout(t); reject(new Error('delete failed ' + r.status)); }
+      });
+    }, 300); });
+  });
+  ok(delWs && delWs.type === 'ISSUE_DELETED', 'deleting an issue broadcasts ISSUE_DELETED to other members');
+
+  // 10e. signed GitHub webhooks: push / PR / issues (regression for the null-author bug)
+  console.log('\n— signed github webhooks —');
+  const crypto = require('crypto');
+  const mongoose = require('mongoose');
+  const GithubIntegration = require('./src/models/GithubIntegration');
+  await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/devcollab');
+  const ghSecret = crypto.randomBytes(24).toString('hex');
+  await GithubIntegration.create({
+    project_id: pid, repo_owner: 'octocat', repo_name: 'hello-world',
+    access_token_encrypted: GithubIntegration.encryptToken('ghp_fake'),
+    webhook_secret: ghSecret, connected_at: new Date(), connected_by: tokensA.user._id,
+  });
+  const sign = (body) => 'sha256=' + crypto.createHmac('sha256', ghSecret).update(JSON.stringify(body)).digest('hex');
+  const webhook = (body, event, sig) => fetch(BASE + '/api/github/webhook/' + pid, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-GitHub-Event': event, ...(sig ? { 'X-Hub-Signature-256': sig } : {}), 'X-GitHub-Delivery': 'del-' + Date.now() },
+    body: JSON.stringify(body),
+  });
+  const pushPayload = { ref: 'refs/heads/main', pusher: { name: 'octocat' }, commits: [{ id: 'abc123', message: 'Fix', author: { name: 'octo' }, url: 'https://x' }] };
+  r = await webhook(pushPayload, 'push', sign(pushPayload));
+  ok(r.status === 200, 'signed push webhook accepted');
+  const prPayload = { action: 'opened', number: 9, pull_request: { number: 9, title: 'PR', html_url: 'https://x/9', state: 'open', user: { login: 'octo' }, merged_at: null } };
+  r = await webhook(prPayload, 'pull_request', sign(prPayload));
+  ok(r.status === 200, 'signed PR webhook accepted');
+  const openPayload = { action: 'opened', issue: { number: 77, title: 'GH Issue', body: 'b', labels: [], state: 'open' } };
+  r = await webhook(openPayload, 'issues', sign(openPayload));
+  ok(r.status === 200, 'signed issues-opened webhook accepted (no 500)');
+  await new Promise(res => setTimeout(res, 400));
+  r = await req('GET', '/api/projects/' + pid + '/issues', { token: tokensA.accessToken });
+  ok((r.json.issues || []).some(i => i.github_issue_number === 77 && i.title.includes('[GH#77]')), 'webhook issue created with [GH#77] title and no author crash');
+  const closePayload = { action: 'closed', issue: { number: 77, title: 'GH Issue', body: 'b', labels: [], state: 'closed' } };
+  r = await webhook(closePayload, 'issues', sign(closePayload));
+  ok(r.status === 200, 'signed issues-closed webhook accepted');
+  await new Promise(res => setTimeout(res, 400));
+  r = await req('GET', '/api/projects/' + pid + '/issues', { token: tokensA.accessToken });
+  ok((r.json.issues || []).find(i => i.github_issue_number === 77)?.status === 'closed', 'webhook-closed issue synced to closed');
+  r = await webhook(pushPayload, 'push');
+  ok(r.status === 400, 'unsigned webhook -> 400');
+  r = await webhook(pushPayload, 'push', 'sha256=' + '0'.repeat(64));
+  ok(r.status === 401, 'bad-signature webhook -> 401');
+  // restore disconnected state for the next section
+  await GithubIntegration.deleteOne({ project_id: pid });
+  await mongoose.disconnect();
+
+  // 11. github integration error paths + user-level token
   console.log('\n— github —');
+  // user-level token endpoints
+  r = await req('GET', '/api/user/github-token', { token: tokensA.accessToken });
+  ok(r.status === 200 && r.json.hasToken === false, 'token status reports not saved');
+  r = await req('PUT', '/api/user/github-token', { token: tokensA.accessToken, body: { token: '' } });
+  ok(r.status === 400, 'saving empty token -> 400');
+  r = await req('PUT', '/api/user/github-token', { token: tokensA.accessToken, body: { token: 'ghp_invalid' } });
+  ok(r.status === 400, 'saving invalid token rejected by GitHub -> 400', 'got ' + r.status + ' ' + JSON.stringify(r.json).slice(0, 120));
   r = await req('GET', '/api/projects/' + pid + '/github/status', { token: tokensA.accessToken });
   ok(r.status === 200 && r.json.connected === false, 'github status reports disconnected');
-  r = await req('POST', '/api/projects/' + pid + '/github/connect', { token: tokensA.accessToken, body: { owner: 'octocat', repo: 'hello-world', token: 'ghp_invalid' } });
-  ok(r.status >= 400 && r.status < 500, 'connect with invalid token fails gracefully', 'got ' + r.status + ' ' + JSON.stringify(r.json).slice(0, 100));
+  r = await req('POST', '/api/projects/' + pid + '/github/connect', { token: tokensA.accessToken, body: { repo: 'octocat/hello-world' } });
+  ok(r.status === 400 && r.json.code === 'NO_TOKEN', 'connect without a token -> 400 NO_TOKEN', 'got ' + r.status + ' ' + JSON.stringify(r.json).slice(0, 100));
+  r = await req('GET', '/api/user/github/repos', { token: tokensA.accessToken });
+  ok(r.status === 400 && r.json.code === 'NO_TOKEN', 'repos without a token -> 400 NO_TOKEN');
+  r = await req('GET', '/api/auth/me', { token: tokensA.accessToken });
+  ok(r.status === 200 && r.json.user.has_github_token === false && !('github_token' in r.json.user), 'me reports has_github_token without leaking the field');
+  // Simulate a token that was valid when saved but later died (bypasses the
+  // save-time validation, which rejects dead tokens by design).
+  const ghMongoose = require('mongoose');
+  const encryption = require('./src/utils/encryption');
+  await ghMongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/devcollab');
+  const UserModel = require('./src/models/User');
+  await UserModel.findByIdAndUpdate(tokensA.user._id, { github_token: encryption.encrypt('ghp_dead_token'), has_github_token: true, github_token_updated_at: new Date() });
+  r = await req('GET', '/api/user/github-token', { token: tokensA.accessToken });
+  ok(r.status === 200 && r.json.hasToken === true, 'token status reports saved after injection');
+  r = await req('GET', '/api/user/github/repos', { token: tokensA.accessToken });
+  ok(r.status === 401, 'repos with dead token -> 401', 'got ' + r.status + ' ' + JSON.stringify(r.json).slice(0, 120));
+  r = await req('POST', '/api/projects/' + pid + '/github/connect', { token: tokensA.accessToken, body: { repo: 'octocat/hello-world' } });
+  ok(r.status === 401, 'connect with dead token fails gracefully', 'got ' + r.status + ' ' + JSON.stringify(r.json).slice(0, 120));
+  // Disconnecting a project must not touch the user-level token.
+  r = await req('DELETE', '/api/projects/' + pid + '/github/disconnect', { token: tokensA.accessToken });
+  ok(r.status === 200, 'owner can disconnect even with a dead token');
+  r = await req('GET', '/api/user/github-token', { token: tokensA.accessToken });
+  ok(r.status === 200 && r.json.hasToken === true, 'disconnecting a project keeps the user token');
+  r = await req('GET', '/api/auth/me', { token: tokensA.accessToken });
+  ok(r.status === 200 && !JSON.stringify(r.json).includes('ghp_dead_token'), 'saved token never serialized in /me');
+  r = await req('GET', '/api/user/github-token', { token: tokensA.accessToken });
+  ok(r.status === 200 && !JSON.stringify(r.json).includes('ghp_dead_token'), 'saved token never serialized in token status');
+  r = await req('DELETE', '/api/user/github-token', { token: tokensA.accessToken });
+  ok(r.status === 200 && r.json.hasToken === false, 'delete token -> hasToken false');
+  r = await req('POST', '/api/projects/' + pid + '/github/connect', { token: tokensA.accessToken, body: { repo: 'octocat/hello-world' } });
+  ok(r.status === 400 && r.json.code === 'NO_TOKEN', 'connect after removing token -> 400 NO_TOKEN');
+  // Push-snippet-to-github must resolve the user-level token (regression: it
+  // used to read only the per-project token, which new connects no longer store).
+  r = await req('POST', '/api/projects/' + pid + '/snippets', { token: tokensA.accessToken, body: { title: 'Push regression', code: 'x', language: 'javascript' } });
+  ok(r.status === 201, 'create snippet for push regression');
+  const pushSnippetId = r.json.snippet._id;
+  await GithubIntegration.create({ project_id: pid, repo_owner: 'octocat', repo_name: 'hello-world', webhook_secret: 'x', connected_at: new Date(), connected_by: tokensA.user._id });
+  r = await req('POST', '/api/projects/' + pid + '/snippets/' + pushSnippetId + '/push-to-github', { token: tokensA.accessToken, body: {} });
+  ok(r.status === 400 && r.json.code === 'NO_TOKEN', 'push-to-github without user token -> 400 NO_TOKEN', 'got ' + r.status + ' ' + JSON.stringify(r.json).slice(0, 80));
+  await UserModel.findByIdAndUpdate(tokensA.user._id, { github_token: encryption.encrypt('ghp_reg_token'), has_github_token: true, github_token_updated_at: new Date() });
+  r = await req('POST', '/api/projects/' + pid + '/snippets/' + pushSnippetId + '/push-to-github', { token: tokensA.accessToken, body: { path: '../evil.js' } });
+  ok(r.status === 400 && r.json.message === 'Invalid file path', 'push-to-github rejects path traversal');
+  r = await req('POST', '/api/projects/' + pid + '/snippets/' + pushSnippetId + '/push-to-github', { token: tokensA.accessToken, body: {} });
+  ok(r.status === 401, 'push-to-github reaches GitHub with the user token', 'got ' + r.status + ' ' + JSON.stringify(r.json).slice(0, 80));
+  await GithubIntegration.deleteMany({ project_id: pid });
+  await UserModel.findByIdAndUpdate(tokensA.user._id, { $set: { github_token: null, has_github_token: false, github_token_updated_at: null } });
+  await ghMongoose.disconnect();
   r = await req('POST', '/api/github/webhook/' + pid, { body: {} });
   ok(r.status === 400 || r.status === 404 || r.status === 200, 'webhook with no payload handled without crashing', 'got ' + r.status);
   r = await req('POST', '/api/github/webhook/000000000000000000000000', { body: {} });
@@ -249,12 +486,46 @@ async function main() {
   console.log('\n— delete —');
   r = await req('DELETE', '/api/projects/' + pid, { token: tokensB.accessToken });
   ok(r.status === 403, 'viewer cannot delete project -> 403');
+  // Seed leftovers the cascade must also clean: a GitHub integration, an invite,
+  // plus whatever issues/snippets/docs/activity the earlier sections created.
+  const delMongoose = require('mongoose');
+  const ActivityModel = require('./src/models/Activity');
+  const InviteModel = require('./src/models/Invite');
+  const SnippetModel = require('./src/models/Snippet');
+  const DocModel = require('./src/models/Doc');
+  const IssueModel = require('./src/models/Issue');
+  await delMongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/devcollab');
+  await GithubIntegration.create({ project_id: pid, repo_owner: 'octocat', repo_name: 'hello-world', webhook_secret: 'x', connected_at: new Date(), connected_by: tokensA.user._id });
+  await InviteModel.create({ project_id: pid, email: 'never@test.dev', token: 'delcascade' + Date.now(), role: 'viewer', invited_by: tokensA.user._id, expires_at: new Date(Date.now() + 86400000) });
+  const seeded = {
+    issues: await IssueModel.countDocuments({ project_id: pid }),
+    snippets: await SnippetModel.countDocuments({ project_id: pid }),
+    docs: await DocModel.countDocuments({ project_id: pid }),
+    activity: await ActivityModel.countDocuments({ project_id: pid }),
+    integration: await GithubIntegration.countDocuments({ project_id: pid }),
+    invites: await InviteModel.countDocuments({ project_id: pid }),
+  };
+  await delMongoose.disconnect();
   r = await req('DELETE', '/api/projects/' + pid, { token: tokensA.accessToken });
   ok(r.status === 200, 'owner deletes project');
   r = await req('GET', '/api/projects/' + pid, { token: tokensA.accessToken });
   ok(r.status === 404, 'deleted project -> 404');
   r = await req('GET', '/api/projects/' + pid + '/issues', { token: tokensA.accessToken });
   ok(r.status === 404, 'deleted project issues -> 404');
+  // cascade: nothing referencing the project may survive the delete
+  await delMongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/devcollab');
+  const remaining = {
+    issues: await IssueModel.countDocuments({ project_id: pid }),
+    snippets: await SnippetModel.countDocuments({ project_id: pid }),
+    docs: await DocModel.countDocuments({ project_id: pid }),
+    activity: await ActivityModel.countDocuments({ project_id: pid }),
+    integration: await GithubIntegration.countDocuments({ project_id: pid }),
+    invites: await InviteModel.countDocuments({ project_id: pid }),
+  };
+  await delMongoose.disconnect();
+  ok(seeded.issues > 0 && seeded.activity > 0 && seeded.integration > 0 && seeded.invites > 0,
+    'cascade had seeded data to clean: ' + JSON.stringify(seeded));
+  ok(Object.values(remaining).every(n => n === 0), 'cascade removed all project data: ' + JSON.stringify(remaining));
 
   console.log('\n=======================================');
   console.log('API integration: ' + passed + ' passed, ' + failed + ' failed');

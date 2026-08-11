@@ -1,4 +1,4 @@
-export default function Input({ label, error, type = 'text', value, onChange, placeholder, required, style = {}, rows }) {
+export default function Input({ label, error, type = 'text', value, onChange, placeholder, required, style = {}, rows, ...rest }) {
   const baseStyle = {
     width: '100%',
     background: 'var(--surface2)',
@@ -39,6 +39,7 @@ export default function Input({ label, error, type = 'text', value, onChange, pl
           rows={rows}
           style={{ ...baseStyle, resize: 'vertical' }}
           {...focusHandlers}
+          {...rest}
         />
       ) : (
         <input
@@ -49,6 +50,7 @@ export default function Input({ label, error, type = 'text', value, onChange, pl
           required={required}
           style={baseStyle}
           {...focusHandlers}
+          {...rest}
         />
       )}
       {error && (

@@ -1,6 +1,8 @@
 require('dotenv').config();
 
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -17,6 +19,7 @@ const snippetRoutes = require('./routes/snippets');
 const docRoutes = require('./routes/docs.js');
 const activityRoutes = require('./routes/activity.js');
 const githubRoutes = require('./routes/github');
+const userRoutes = require('./routes/user');
 
 const app = express();
 const server = http.createServer(app);
@@ -37,10 +40,26 @@ app.use('/api/projects/:id/docs', docRoutes);
 app.use('/api/projects/:id/activity', activityRoutes);
 app.use('/api/projects', githubRoutes);
 app.use('/api/github', githubRoutes);
+app.use('/api/user', userRoutes);
 
 const { acceptInvite } = require('./controllers/projectController');
 const { authenticate } = require('./middleware/auth');
 app.post('/api/invite/:token/accept', authenticate, acceptInvite);
+
+// Production: serve the built frontend from the same origin, so the relative
+// /api base URL and same-origin WebSocket both work without CORS or proxies.
+const distDir = path.join(__dirname, '..', '..', 'frontend', 'dist');
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  // SPA fallback: deep links (e.g. /projects/xyz) resolve to index.html so
+  // react-router can handle them. API/WS/health paths keep their own routing.
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/ws') && !req.path.startsWith('/health')) {
+      return res.sendFile(path.join(distDir, 'index.html'));
+    }
+    next();
+  });
+}
 
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
 app.use(errorHandler);

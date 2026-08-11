@@ -2,10 +2,42 @@ const crypto = require('crypto');
 const GithubIntegration = require('../models/GithubIntegration');
 const Project = require('../models/Project');
 const Issue = require('../models/Issue');
+const User = require('../models/User');
+const { getUserGitHubToken } = require('./userController');
 const { logActivity } = require('../services/activityService');
 const { broadcastToProject } = require('../websocket/wsServer');
 
 const GITHUB_API = 'https://api.github.com';
+
+// Parse "owner/name", "owner/name.git", or a full https://github.com/... URL
+// into { repo_owner, repo_name }. Returns null when unrecognizable.
+function parseRepo(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return null;
+  let parts;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      parts = new URL(raw).pathname.split('/').filter(Boolean);
+    } catch { return null; }
+  } else {
+    parts = raw.split('/');
+  }
+  if (parts.length < 2) return null;
+  const repo_owner = parts[parts.length - 2];
+  const repo_name = parts[parts.length - 1].replace(/\.git$/, '');
+  if (!repo_owner || !repo_name) return null;
+  return { repo_owner, repo_name };
+}
+
+// Resolve the token for a project integration: the connected user's stored
+// token first (single source of truth), falling back to a legacy token stored
+// on the integration itself (pre user-level-token connects).
+async function resolveIntegrationToken(integration, userId) {
+  const userToken = await getUserGitHubToken(userId);
+  if (userToken) return userToken;
+  if (integration && integration.access_token_encrypted) return integration.getAccessToken();
+  return null;
+}
 
 function githubHeaders(token) {
   return {
@@ -29,20 +61,27 @@ async function githubFetch(url, token) {
 
 const connectGitHub = async (req, res, next) => {
   try {
-    const { repo_owner, repo_name, access_token } = req.body;
-    if (!repo_owner || !repo_name || !access_token) {
-      return res.status(400).json({ message: 'repo_owner, repo_name, and access_token are required' });
+    const { repo } = req.body;
+    const parsed = parseRepo(repo);
+    if (!parsed) {
+      return res.status(400).json({ message: 'A repository is required — paste owner/repo or a GitHub URL' });
+    }
+    const { repo_owner, repo_name } = parsed;
+
+    // The token lives on the user now — connect never asks for one.
+    const token = await getUserGitHubToken(req.user._id);
+    if (!token) {
+      return res.status(400).json({ code: 'NO_TOKEN', message: 'Add your GitHub token in Settings first' });
     }
     try {
-      await githubFetch(GITHUB_API + '/repos/' + repo_owner + '/' + repo_name, access_token);
+      await githubFetch(GITHUB_API + '/repos/' + repo_owner + '/' + repo_name, token);
     } catch (err) {
       return res.status(err.status || 400).json({ message: 'GitHub verification failed: ' + err.message });
     }
     const webhook_secret = crypto.randomBytes(24).toString('hex');
-    const encrypted = GithubIntegration.encryptToken(access_token);
     const integration = await GithubIntegration.findOneAndUpdate(
       { project_id: req.params.id },
-      { project_id: req.params.id, repo_owner, repo_name, access_token_encrypted: encrypted, webhook_secret, connected_at: new Date(), connected_by: req.user._id },
+      { project_id: req.params.id, repo_owner, repo_name, webhook_secret, connected_at: new Date(), connected_by: req.user._id },
       { upsert: true, new: true }
     );
     await Project.findByIdAndUpdate(req.params.id, { github_repo: repo_owner + '/' + repo_name });
@@ -74,7 +113,8 @@ const fetchCommits = async (req, res, next) => {
   try {
     const integration = await GithubIntegration.findOne({ project_id: req.params.id });
     if (!integration) return res.status(404).json({ message: 'GitHub not connected' });
-    const token = integration.getAccessToken();
+    const token = await resolveIntegrationToken(integration, req.user._id);
+    if (!token) return res.status(400).json({ code: 'NO_TOKEN', message: 'No GitHub token — add one in Settings' });
     const data = await githubFetch(GITHUB_API + '/repos/' + integration.repo_owner + '/' + integration.repo_name + '/commits?per_page=20', token);
     const commits = data.map(c => ({ sha: c.sha.slice(0, 7), fullSha: c.sha, message: c.commit.message.split('\n')[0], author: c.commit.author.name, date: c.commit.author.date, url: c.html_url }));
     res.json({ commits });
@@ -88,7 +128,8 @@ const fetchPullRequests = async (req, res, next) => {
   try {
     const integration = await GithubIntegration.findOne({ project_id: req.params.id });
     if (!integration) return res.status(404).json({ message: 'GitHub not connected' });
-    const token = integration.getAccessToken();
+    const token = await resolveIntegrationToken(integration, req.user._id);
+    if (!token) return res.status(400).json({ code: 'NO_TOKEN', message: 'No GitHub token — add one in Settings' });
     const data = await githubFetch(GITHUB_API + '/repos/' + integration.repo_owner + '/' + integration.repo_name + '/pulls?state=all&per_page=20', token);
     const pulls = data.map(pr => ({ number: pr.number, title: pr.title, state: pr.merged_at ? 'merged' : pr.state, author: pr.user && pr.user.login, created_at: pr.created_at, updated_at: pr.updated_at, url: pr.html_url, mergeable_state: pr.mergeable_state }));
     res.json({ pulls });
@@ -102,7 +143,8 @@ const fetchBranches = async (req, res, next) => {
   try {
     const integration = await GithubIntegration.findOne({ project_id: req.params.id });
     if (!integration) return res.status(404).json({ message: 'GitHub not connected' });
-    const token = integration.getAccessToken();
+    const token = await resolveIntegrationToken(integration, req.user._id);
+    if (!token) return res.status(400).json({ code: 'NO_TOKEN', message: 'No GitHub token — add one in Settings' });
     const data = await githubFetch(GITHUB_API + '/repos/' + integration.repo_owner + '/' + integration.repo_name + '/branches', token);
     const branches = data.map(b => ({ name: b.name, sha: b.commit && b.commit.sha && b.commit.sha.slice(0, 7), protected: b.protected }));
     res.json({ branches });
@@ -158,4 +200,4 @@ const handleWebhook = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { connectGitHub, disconnectGitHub, getGitHubStatus, fetchCommits, fetchPullRequests, fetchBranches, handleWebhook };
+module.exports = { connectGitHub, disconnectGitHub, getGitHubStatus, fetchCommits, fetchPullRequests, fetchBranches, handleWebhook, resolveIntegrationToken };

@@ -40,7 +40,7 @@ export default function SnippetsPage() {
   const [pushSnippet, setPushSnippet] = useState(null);
   const [pushPath, setPushPath] = useState('');
   const [pushing, setPushing] = useState(false);
-  const myRole = useMyRole(projectId);
+  const { myRole } = useMyRole(projectId);
   const canEdit = myRole === 'editor' || myRole === 'owner';
 
   useEffect(() => {

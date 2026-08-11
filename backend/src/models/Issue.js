@@ -52,7 +52,8 @@ const issueSchema = mongoose.Schema({
     author_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
+        // nullable: GitHub webhooks create issues with no author
+        default: null,
     },
     assignee_id: {
         type: mongoose.Schema.Types.ObjectId,

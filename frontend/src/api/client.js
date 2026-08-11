@@ -1,18 +1,28 @@
 import axios from 'axios';
+import { ensureFreshToken } from './token';
 
 const client = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
-client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+// Attach a fresh access token to every request. The token module refreshes
+// proactively when the stored token is expired, so requests never leave with
+// a dead token and the browser doesn't log a 401 for the first attempt.
+client.interceptors.request.use(async (config) => {
+  try {
+    const token = await ensureFreshToken();
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  } catch {
+    // No token available — send unauthenticated; the 401 handler below decides.
+  }
   return config;
 });
 
-let isRefreshing = false;
-let refreshQueue = [];
+// Safety net for races (token expired mid-flight, server-side clock skew):
+// refresh once and retry. If the refresh itself fails, the session is dead —
+// clear tokens and send the user to login.
+let redirecting = false;
 
 client.interceptors.response.use(
   (res) => res,
@@ -24,37 +34,19 @@ client.interceptors.response.use(
       !original._retry
     ) {
       original._retry = true;
-
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          refreshQueue.push({ resolve, reject });
-        }).then((token) => {
-          original.headers.Authorization = `Bearer ${token}`;
-          return client(original);
-        });
-      }
-
-      isRefreshing = true;
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) throw new Error('No refresh token');
-        const res = await axios.post('/api/auth/refresh', { refreshToken });
-        const { accessToken, refreshToken: newRefresh } = res.data;
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', newRefresh);
-        refreshQueue.forEach((q) => q.resolve(accessToken));
-        refreshQueue = [];
-        original.headers.Authorization = `Bearer ${accessToken}`;
+        const token = await ensureFreshToken();
+        if (!token) throw new Error('Cannot refresh');
+        original.headers.Authorization = `Bearer ${token}`;
         return client(original);
       } catch (err) {
-        refreshQueue.forEach((q) => q.reject(err));
-        refreshQueue = [];
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
+        if (!redirecting) {
+          redirecting = true;
+          window.location.href = '/login';
+        }
         return Promise.reject(err);
-      } finally {
-        isRefreshing = false;
       }
     }
     return Promise.reject(error);

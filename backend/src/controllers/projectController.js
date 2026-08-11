@@ -6,6 +6,8 @@ const Invite = require('../models/Invite');
 const Issue = require('../models/Issue');
 const Snippet = require('../models/Snippet');
 const Doc = require('../models/Doc');
+const Activity = require('../models/Activity');
+const GithubIntegration = require('../models/GithubIntegration');
 const { logActivity } = require('../services/activityService');
 const { broadcastToProject } = require('../websocket/wsServer');
 const { sendInviteEmail } = require('../utils/sendEmail');
@@ -84,7 +86,11 @@ const updateProject = async (req, res, next) => {
   try {
     const { name, description } = req.body;
     const update = {};
-    if (name) update.name = name;
+    if (name !== undefined) {
+      const trimmed = String(name).trim();
+      if (!trimmed) return res.status(400).json({ message: 'Project name is required' });
+      update.name = trimmed;
+    }
     if (description !== undefined) update.description = description;
 
     const project = await Project.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
@@ -105,6 +111,9 @@ const deleteProject = async (req, res, next) => {
       Issue.deleteMany({ project_id: req.params.id }),
       Snippet.deleteMany({ project_id: req.params.id }),
       Doc.deleteMany({ project_id: req.params.id }),
+      Activity.deleteMany({ project_id: req.params.id }),
+      GithubIntegration.deleteMany({ project_id: req.params.id }),
+      Invite.deleteMany({ project_id: req.params.id }),
     ]);
     res.json({ message: 'Project deleted' });
   } catch (err) {

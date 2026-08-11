@@ -19,7 +19,7 @@ export default function DocsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [creating, setCreating] = useState(false);
-  const myRole = useMyRole(projectId);
+  const { myRole } = useMyRole(projectId);
   const canEdit = myRole === 'editor' || myRole === 'owner';
 
   useEffect(() => {

@@ -4,6 +4,7 @@
   "description": "",
   "main": "app.js",
   "scripts": {
+    "start": "node src/app.js",
     "test": "node test-api.js",
     "dev": "nodemon src/app.js"
   },
@@ -14,7 +15,6 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
-    "crypto": "^1.0.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-validator": "^7.3.2",
@@ -22,7 +22,6 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.7.1",
     "morgan": "^1.11.0",
-    "node-fetch": "^3.3.2",
     "nodemailer": "^9.0.1",
     "ws": "^8.21.0"
   }
