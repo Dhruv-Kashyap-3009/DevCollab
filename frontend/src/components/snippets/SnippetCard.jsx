@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 
 const langColor = { javascript: 'warning', typescript: 'primary', python: 'success', rust: 'danger', go: 'muted', css: 'purple', html: 'danger', bash: 'muted' };
 
-export default function SnippetCard({ snippet, onClick, onDelete }) {
+export default function SnippetCard({ snippet, onClick }) {
   const [hovered, setHovered] = useState(false);
 
   const copy = (e) => {

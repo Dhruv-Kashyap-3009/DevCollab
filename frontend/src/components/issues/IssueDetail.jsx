@@ -17,7 +17,7 @@ function timeAgo(date) {
   return Math.floor(diff / 86400) + 'd ago';
 }
 
-export default function IssueDetail({ projectId, issue: initialIssue, onClose, onUpdate }) {
+export default function IssueDetail({ projectId, issue: initialIssue, onUpdate, canEdit = true }) {
   const [issue, setIssue] = useState(initialIssue);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
@@ -73,9 +73,11 @@ export default function IssueDetail({ projectId, issue: initialIssue, onClose, o
             <span style={{ fontSize: '12px', color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>#{issue.number}</span>
             <h2 style={{ fontSize: '18px', fontWeight: 600, marginTop: '4px', letterSpacing: '-0.02em' }}>{issue.title}</h2>
           </div>
-          <Button variant="ghost" size="sm" onClick={toggleStatus}>
-            {issue.status === 'closed' ? 'Reopen' : 'Close issue'}
-          </Button>
+          {canEdit && (
+            <Button variant="ghost" size="sm" onClick={toggleStatus}>
+              {issue.status === 'closed' ? 'Reopen' : 'Close issue'}
+            </Button>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
@@ -129,6 +131,7 @@ export default function IssueDetail({ projectId, issue: initialIssue, onClose, o
         </div>
 
         {/* Comment form */}
+        {canEdit && (
         <form onSubmit={submitComment} style={{ display: 'flex', gap: '10px', marginTop: '14px', alignItems: 'flex-end' }}>
           <textarea
             value={comment}
@@ -147,6 +150,7 @@ export default function IssueDetail({ projectId, issue: initialIssue, onClose, o
           />
           <Button type="submit" loading={submitting} size="sm">Post</Button>
         </form>
+        )}
       </div>
     </div>
   );

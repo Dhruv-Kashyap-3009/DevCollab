@@ -3,17 +3,14 @@ import { docsApi } from '../../api/services';
 import Button from '../ui/Button';
 import toast from 'react-hot-toast';
 
-export default function DocEditor({ projectId, doc, onSave, onClose }) {
+export default function DocEditor({ projectId, doc, onSave, onClose, canEdit = true }) {
+  // The editor is remounted for each doc (DocsPage swaps it out when one is
+  // closed), so props are the source of truth at mount time.
   const [title, setTitle] = useState(doc?.title || '');
   const [content, setContent] = useState(doc?.content || '');
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const autoSaveRef = useRef(null);
-
-  useEffect(() => {
-    setTitle(doc?.title || '');
-    setContent(doc?.content || '');
-  }, [doc?._id]);
 
   const save = async () => {
     if (!title.trim()) { toast.error('Title is required'); return; }
@@ -28,11 +25,11 @@ export default function DocEditor({ projectId, doc, onSave, onClose }) {
   };
 
   useEffect(() => {
-    if (!doc?._id) return;
+    if (!doc?._id || !canEdit) return;
     clearTimeout(autoSaveRef.current);
     autoSaveRef.current = setTimeout(save, 2000);
     return () => clearTimeout(autoSaveRef.current);
-  }, [content, title]);
+  }, [content, title, canEdit]);
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
 
@@ -63,6 +60,7 @@ export default function DocEditor({ projectId, doc, onSave, onClose }) {
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
+          readOnly={!canEdit}
           placeholder="Document title"
           style={{
             flex: 1, background: 'none', border: 'none',
@@ -73,9 +71,9 @@ export default function DocEditor({ projectId, doc, onSave, onClose }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
           <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
-            {saving ? 'Saving…' : lastSaved ? `Saved ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Auto-saving'}
+            {!canEdit ? 'Read-only' : saving ? 'Saving…' : lastSaved ? `Saved ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Auto-saving'}
           </span>
-          <Button size="sm" onClick={save} loading={saving}>Save</Button>
+          {canEdit && <Button size="sm" onClick={save} loading={saving}>Save</Button>}
         </div>
       </div>
 
@@ -84,6 +82,7 @@ export default function DocEditor({ projectId, doc, onSave, onClose }) {
         <textarea
           value={content}
           onChange={e => setContent(e.target.value)}
+          readOnly={!canEdit}
           placeholder="Start writing your document…
 
 Use plain text, markdown-style headings (# Title), lists (- item), or code blocks (` ` `code` ` `)."

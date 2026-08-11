@@ -7,6 +7,7 @@ import CommitList from '../components/github/CommitList';
 import PullRequestList from '../components/github/PullRequestList';
 import WebhookSetup from '../components/github/WebhookSetup';
 import useProjectSocket from '../hooks/useProjectSocket';
+import useMyRole from '../hooks/useMyRole';
 import toast from 'react-hot-toast';
 
 const TABS = ['Overview', 'Commits', 'Pull Requests', 'Webhook Setup'];
@@ -23,6 +24,8 @@ export default function GitHubPage() {
   const [branches, setBranches] = useState([]);
   const [webhookData, setWebhookData] = useState({ url: '', secret: '' });
   const [recentEvents, setRecentEvents] = useState([]);
+  const myRole = useMyRole(projectId);
+  const canManage = myRole === 'owner';
 
   useEffect(() => {
     githubApi.status(projectId).then(res => {
@@ -114,8 +117,10 @@ export default function GitHubPage() {
       {/* Tab content */}
       {activeTab === 'Overview' && (
         status?.connected
-          ? <GitHubStatus status={status} branches={branches} onDisconnect={handleDisconnect} />
-          : <GitHubConnect projectId={projectId} onConnected={handleConnected} />
+          ? <GitHubStatus status={status} branches={branches} onDisconnect={handleDisconnect} canManage={canManage} />
+          : canManage
+            ? <GitHubConnect projectId={projectId} onConnected={handleConnected} />
+            : <div style={{ color: 'var(--muted)', fontSize: '13px', padding: '40px', textAlign: 'center', background: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>Only project owners can connect a GitHub repository.</div>
       )}
 
       {activeTab === 'Commits' && (
@@ -132,7 +137,7 @@ export default function GitHubPage() {
 
       {activeTab === 'Webhook Setup' && (
         <WebhookSetup
-          webhookUrl={webhookData.url || (status?.connected ? `http://localhost:5000/api/github/webhook/${projectId}` : '')}
+          webhookUrl={webhookData.url || (status?.connected ? `${window.location.origin}/api/github/webhook/${projectId}` : '')}
           webhookSecret={webhookData.secret}
           recentEvents={recentEvents}
         />

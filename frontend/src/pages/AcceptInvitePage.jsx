@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { projectsApi } from '../api/services';
+import BrandMark from '../components/ui/BrandMark';
 import toast from 'react-hot-toast';
 
 export default function AcceptInvitePage() {
@@ -31,6 +32,11 @@ export default function AcceptInvitePage() {
       minHeight: '100vh', display: 'flex', alignItems: 'center',
       justifyContent: 'center', background: 'var(--bg)',
     }}>
+      <div style={{ width: '100%', maxWidth: '400px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '11px', justifyContent: 'center', marginBottom: '28px' }}>
+          <BrandMark size={30} />
+          <span style={{ fontWeight: 700, fontSize: '18px', color: 'var(--text)', letterSpacing: '-0.03em' }}>DevCollab</span>
+        </div>
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)', padding: '40px',
@@ -66,6 +72,7 @@ export default function AcceptInvitePage() {
             >Go to Dashboard</button>
           </>
         )}
+      </div>
       </div>
     </div>
   );

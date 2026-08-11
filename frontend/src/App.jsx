@@ -40,11 +40,11 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        <Route path="/" element={<RequireAuth><AppLayout title="Dashboard" /></RequireAuth>}>
+        <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>}>
           <Route index element={<DashboardPage />} />
         </Route>
 
-        <Route path="/projects/:projectId" element={<RequireAuth><AppLayout title="Project" /></RequireAuth>}>
+        <Route path="/projects/:projectId" element={<RequireAuth><AppLayout /></RequireAuth>}>
           <Route index element={<ProjectPage />} />
           <Route path="issues" element={<IssuesPage />} />
           <Route path="snippets" element={<SnippetsPage />} />

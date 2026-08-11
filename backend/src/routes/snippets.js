@@ -7,14 +7,14 @@ const router = express.Router({ mergeParams: true });
 router.use(authenticate, requireProjectMember('viewer'));
 
 router.get('/', listSnippets);
-router.post('/', [
+router.post('/', requireProjectMember('editor'), [
   body('title').trim().notEmpty().withMessage('Title is required'),
   body('code').notEmpty().withMessage('Code is required'),
   body('language').notEmpty().withMessage('Language is required'),
 ], createSnippet);
 router.post('/:snippetId/push-to-github', requireProjectMember('editor'), pushSnippetToGitHub);
 router.get('/:snippetId', getSnippet);
-router.patch('/:snippetId', updateSnippet);
-router.delete('/:snippetId', deleteSnippet);
+router.patch('/:snippetId', requireProjectMember('editor'), updateSnippet);
+router.delete('/:snippetId', requireProjectMember('editor'), deleteSnippet);
 
 module.exports = router;

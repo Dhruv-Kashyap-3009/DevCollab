@@ -6,6 +6,7 @@ import SnippetForm from '../components/snippets/SnippetForm';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { SkeletonList } from '../components/ui/Skeleton';
+import useMyRole from '../hooks/useMyRole';
 import toast from 'react-hot-toast';
 import Badge from '../components/ui/Badge';
 
@@ -39,6 +40,8 @@ export default function SnippetsPage() {
   const [pushSnippet, setPushSnippet] = useState(null);
   const [pushPath, setPushPath] = useState('');
   const [pushing, setPushing] = useState(false);
+  const myRole = useMyRole(projectId);
+  const canEdit = myRole === 'editor' || myRole === 'owner';
 
   useEffect(() => {
     snippetsApi.list(projectId).then(res => { setSnippets(res.data.snippets); setLoading(false); }).catch(() => setLoading(false));
@@ -103,10 +106,12 @@ export default function SnippetsPage() {
             <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em' }}>Snippets</h1>
             <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '3px' }}>Reusable code for your team</p>
           </div>
-          <Button onClick={() => setShowForm(true)}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            New snippet
-          </Button>
+          {canEdit && (
+            <Button onClick={() => setShowForm(true)}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New snippet
+            </Button>
+          )}
         </div>
       )}
 
@@ -121,9 +126,9 @@ export default function SnippetsPage() {
                 {viewSnippet.description && <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '4px' }}>{viewSnippet.description}</p>}
               </div>
               <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                <Button variant="ghost" size="sm" onClick={() => openPushModal(viewSnippet)}>Push to GitHub</Button>
-                <Button variant="ghost" size="sm" onClick={() => { setEditSnippet(viewSnippet); setViewSnippet(null); }}>Edit</Button>
-                <Button variant="danger" size="sm" onClick={() => deleteSnippet(viewSnippet._id)}>Delete</Button>
+                {canEdit && <Button variant="ghost" size="sm" onClick={() => openPushModal(viewSnippet)}>Push to GitHub</Button>}
+                {canEdit && <Button variant="ghost" size="sm" onClick={() => { setEditSnippet(viewSnippet); setViewSnippet(null); }}>Edit</Button>}
+                {canEdit && <Button variant="danger" size="sm" onClick={() => deleteSnippet(viewSnippet._id)}>Delete</Button>}
               </div>
             </div>
             {/* Language bar */}

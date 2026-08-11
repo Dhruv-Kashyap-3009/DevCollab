@@ -8,7 +8,7 @@ function timeAgo(date) {
   return Math.floor(diff / 86400) + 'd ago';
 }
 
-export default function DocList({ docs, onSelect, onDelete }) {
+export default function DocList({ docs, onSelect, onDelete, canEdit = true }) {
   const [hoveredId, setHoveredId] = useState(null);
 
   if (!docs.length) return (
@@ -56,7 +56,7 @@ export default function DocList({ docs, onSelect, onDelete }) {
             </div>
           </div>
 
-          <button
+          {canEdit && <button
             onClick={e => { e.stopPropagation(); onDelete(doc._id); }}
             style={{
               background: 'none', border: 'none', color: 'var(--muted)',
@@ -68,7 +68,7 @@ export default function DocList({ docs, onSelect, onDelete }) {
             }}
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--danger-dim)'; e.currentTarget.style.color = 'var(--danger)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}
-          >×</button>
+          >×</button>}
         </div>
       ))}
     </div>

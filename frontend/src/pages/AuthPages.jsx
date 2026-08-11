@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
+import BrandMark from '../components/ui/BrandMark';
 import toast from 'react-hot-toast';
 
 function AuthShell({ children }) {
@@ -14,16 +15,9 @@ function AuthShell({ children }) {
     }}>
       <div style={{ width: '100%', maxWidth: '380px' }} className="fade-in">
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center', marginBottom: '36px' }}>
-          <div style={{
-            width: 36, height: 36,
-            background: 'linear-gradient(135deg, var(--primary) 0%, #6366f1 100%)',
-            borderRadius: '10px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '17px', fontWeight: 800, color: '#fff',
-            boxShadow: '0 4px 16px rgba(59,130,246,0.4)',
-          }}>D</div>
-          <span style={{ fontWeight: 700, fontSize: '17px', color: 'var(--text)', letterSpacing: '-0.03em' }}>DevCollab</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '11px', justifyContent: 'center', marginBottom: '36px' }}>
+          <BrandMark size={30} />
+          <span style={{ fontWeight: 700, fontSize: '18px', color: 'var(--text)', letterSpacing: '-0.03em' }}>DevCollab</span>
         </div>
 
         {/* Card */}

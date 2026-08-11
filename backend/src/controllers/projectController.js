@@ -68,7 +68,13 @@ const getProject = async (req, res, next) => {
       Doc.countDocuments({ project_id: project._id }),
     ]);
 
-    res.json({ project, stats: { openIssues, totalSnippets, totalDocs, memberCount: project.members.length } });
+    const userMember = project.members.find(m => {
+      const mid = (m.user_id._id || m.user_id).toString();
+      return mid === req.user._id.toString();
+    });
+    const projectObj = project.toObject();
+    projectObj.myRole = userMember?.role;
+    res.json({ project: projectObj, stats: { openIssues, totalSnippets, totalDocs, memberCount: project.members.length } });
   } catch (err) {
     next(err);
   }

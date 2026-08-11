@@ -18,40 +18,54 @@ function timeAgo(date) {
   return Math.floor(diff / 86400) + 'd ago';
 }
 
-const activityIcon = {
-  issue_created: '◎', issue_updated: '◎', issue_closed: '◎', issue_reopened: '◎',
-  comment_added: '💬', snippet_created: '⟨⟩', snippet_updated: '⟨⟩', snippet_deleted: '⟨⟩',
-  doc_created: '≡', doc_updated: '≡', doc_deleted: '≡',
-  member_added: '👤', github_push: '🔀', github_pr: '🔁', github_connected: '◉', project_updated: '⬡',
+const activityColor = {
+  issue_created: 'var(--success)', issue_reopened: 'var(--success)',
+  issue_updated: 'var(--primary)', issue_closed: 'var(--muted)',
+  comment_added: 'var(--primary)',
+  snippet_created: 'var(--warning)', snippet_updated: 'var(--warning)', snippet_deleted: 'var(--muted)',
+  doc_created: 'var(--purple)', doc_updated: 'var(--purple)', doc_deleted: 'var(--muted)',
+  member_added: 'var(--success)',
+  github_push: 'var(--primary)', github_pr: 'var(--purple)', github_connected: 'var(--success)',
+  project_updated: 'var(--warning)',
 };
 
-const activityColor = {
-  issue_created: 'var(--success)', issue_closed: 'var(--muted)',
-  comment_added: 'var(--primary)', snippet_created: 'var(--warning)',
-  doc_created: 'var(--purple)', github_push: 'var(--primary)', github_pr: 'var(--purple)',
-  member_added: 'var(--success)',
+const svgProps = {
+  width: 15, height: 15, viewBox: '0 0 24 24',
+  fill: 'none', stroke: 'currentColor', strokeWidth: 2,
+  strokeLinecap: 'round', strokeLinejoin: 'round',
+};
+
+const STAT_ICONS = {
+  issues: (<svg {...svgProps}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>),
+  snippets: (<svg {...svgProps}><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>),
+  docs: (<svg {...svgProps}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>),
+  members: (<svg {...svgProps}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>),
 };
 
 function StatCard({ label, value, icon, color }) {
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-md)', padding: '18px 20px',
-      display: 'flex', alignItems: 'center', gap: '14px',
+      borderRadius: 'var(--radius-md)', padding: '16px 18px',
     }}>
-      <div style={{
-        width: 38, height: 38, borderRadius: 'var(--radius)',
-        background: color ? `${color}18` : 'var(--surface2)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '16px', flexShrink: 0,
-      }}>{icon}</div>
-      <div>
-        <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1 }}>{value}</div>
-        <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '3px' }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <span style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500 }}>{label}</span>
+        <span style={{
+          width: 30, height: 30, borderRadius: 'var(--radius)',
+          background: color ? `color-mix(in srgb, ${color} 14%, transparent)` : 'var(--surface2)',
+          color: color || 'var(--muted)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>{icon}</span>
       </div>
+      <div style={{ fontSize: '26px', fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1 }}>{value}</div>
     </div>
   );
 }
+
+const sectionTitle = {
+  fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)',
+  textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px',
+};
 
 const selectStyle = {
   background: 'var(--surface2)', border: '1px solid var(--border)',
@@ -122,121 +136,127 @@ export default function ProjectPage() {
   const roleVariant = { owner: 'primary', editor: 'warning', viewer: 'muted' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }} className="fade-in">
-      {/* Header */}
-      <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em' }}>{project.name}</h1>
-          {project.description && <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '4px' }}>{project.description}</p>}
+    <div className="page-with-rail fade-in">
+      {/* Main column */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
+        {/* Header */}
+        <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: 'var(--radius-sm)',
+                background: 'var(--primary-dim)', border: '1px solid rgba(59,130,246,0.25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '14px', fontWeight: 700, color: 'var(--primary)', flexShrink: 0,
+              }}>{project.name[0].toUpperCase()}</div>
+              <h1 style={{
+                fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{project.name}</h1>
+            </div>
+            {project.description && <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '6px' }}>{project.description}</p>}
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => { setEditName(project.name); setEditDesc(project.description); setShowEditModal(true); }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+            Edit
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => { setEditName(project.name); setEditDesc(project.description); setShowEditModal(true); }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Edit
-        </Button>
-      </div>
 
-      {/* Stats */}
-      <div className="grid-4-stats" style={{ gap: '12px' }}>
-        <StatCard label="Open Issues" value={stats.openIssues || 0} icon="◎" color="var(--danger)" />
-        <StatCard label="Snippets" value={stats.totalSnippets || 0} icon="⟨⟩" color="var(--warning)" />
-        <StatCard label="Docs" value={stats.totalDocs || 0} icon="≡" color="var(--purple)" />
-        <StatCard label="Members" value={stats.memberCount || 0} icon="👥" color="var(--success)" />
-      </div>
+        {/* Stats */}
+        <div className="grid-4-stats" style={{ gap: '12px' }}>
+          <StatCard label="Open issues" value={stats.openIssues || 0} icon={STAT_ICONS.issues} color="var(--danger)" />
+          <StatCard label="Snippets" value={stats.totalSnippets || 0} icon={STAT_ICONS.snippets} color="var(--warning)" />
+          <StatCard label="Docs" value={stats.totalDocs || 0} icon={STAT_ICONS.docs} color="var(--purple)" />
+          <StatCard label="Members" value={stats.memberCount || 0} icon={STAT_ICONS.members} color="var(--success)" />
+        </div>
 
-      <div className="grid-2" style={{ gap: '20px', alignItems: 'start' }}>
-        {/* Activity Feed */}
+        {/* Activity timeline */}
         <div>
-          <h2 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Recent Activity</h2>
+          <h2 style={sectionTitle}>Recent activity</h2>
           {activities.length === 0 ? (
-            <div style={{ color: 'var(--muted)', fontSize: '13px', padding: '20px 0' }}>No activity yet.</div>
+            <div style={{
+              background: 'var(--surface)', border: '1px dashed var(--border)',
+              borderRadius: 'var(--radius-md)', padding: '28px', textAlign: 'center',
+              color: 'var(--muted)', fontSize: '13px',
+            }}>
+              No activity yet — create an issue, snippet, or doc to get started.
+            </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              {activities.map((a, idx) => (
-                <div key={a._id} style={{
-                  display: 'flex', gap: '10px', alignItems: 'flex-start',
-                  padding: '10px 12px',
-                  background: 'var(--surface)',
-                  borderRadius: 'var(--radius)',
-                  border: '1px solid var(--border-subtle)',
-                  marginBottom: idx < activities.length - 1 ? '2px' : 0,
-                }}>
-                  <span style={{
-                    width: '26px', height: '26px',
-                    borderRadius: '50%',
-                    background: activityColor[a.type] ? `color-mix(in srgb, ${activityColor[a.type]} 18%, var(--surface2))` : 'var(--surface2)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '12px', flexShrink: 0,
-                  }}>{activityIcon[a.type] || '•'}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: '13px', color: 'var(--text)', lineHeight: 1.4 }}>
-                      <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{a.user_id?.name || 'System'}</strong>
-                      {' '}<span style={{ color: 'var(--muted)' }}>{a.type.replace(/_/g, ' ')}</span>
+            <div className="timeline">
+              {activities.map(a => (
+                <div className="timeline-item" key={a._id}>
+                  <span className="timeline-dot" style={{ background: activityColor[a.type] || 'var(--muted)' }} />
+                  <div className="timeline-body">
+                    <div className="timeline-text">
+                      <strong style={{ fontWeight: 600 }}>{a.user_id?.name || 'System'}</strong>
+                      <span style={{ color: 'var(--muted)' }}> {a.type.replace(/_/g, ' ')}</span>
                       {a.payload?.title && <span style={{ color: 'var(--text-secondary)' }}> "{a.payload.title}"</span>}
-                      {a.payload?.issueNumber && <span style={{ color: 'var(--primary)' }}> #{a.payload.issueNumber}</span>}
-                    </span>
-                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{timeAgo(a.created_at)}</div>
+                      {a.payload?.issueNumber && <span style={{ color: 'var(--primary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}> #{a.payload.issueNumber}</span>}
+                    </div>
+                    <div className="timeline-time">{timeAgo(a.created_at)}</div>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+      </div>
 
-        {/* Members + Invite */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <h2 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Members ({project.members?.length || 0})
-            </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {(project.members || []).map(m => {
-                const user = m.user_id;
-                const isOnline = onlineMembers.some(o => o.userId === (user?._id || m.user_id));
-                return (
-                  <div key={m._id} style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 12px',
-                    background: 'var(--surface)', border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius)',
-                  }}>
-                    <div style={{ position: 'relative' }}>
-                      <Avatar name={user?.name || '?'} size={30} />
-                      {isOnline && (
-                        <span style={{
-                          position: 'absolute', bottom: 0, right: 0,
-                          width: '8px', height: '8px',
-                          background: 'var(--success)', borderRadius: '50%',
-                          border: '2px solid var(--surface)',
-                        }} />
-                      )}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)' }}>{user?.name || 'Unknown'}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</div>
-                    </div>
-                    <Badge variant={roleVariant[m.role]}>{m.role}</Badge>
+      {/* Right rail */}
+      <aside className="rail">
+        {/* Members */}
+        <div className="rail-card">
+          <h3>Members ({project.members?.length || 0})</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {(project.members || []).map(m => {
+              const user = m.user_id;
+              const isOnline = onlineMembers.some(o => o.userId === (user?._id || m.user_id));
+              return (
+                <div key={m._id} style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '7px 8px', borderRadius: 'var(--radius)',
+                  transition: 'background 0.15s ease',
+                }}>
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <Avatar name={user?.name || '?'} size={30} />
+                    {isOnline && (
+                      <span style={{
+                        position: 'absolute', bottom: 0, right: 0,
+                        width: '8px', height: '8px',
+                        background: 'var(--success)', borderRadius: '50%',
+                        border: '2px solid var(--surface)',
+                      }} />
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Invite */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '16px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-secondary)' }}>Invite member</h3>
-            <form onSubmit={sendInvite} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="colleague@example.com" type="email" />
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
-                  <option value="viewer">Viewer</option>
-                  <option value="editor">Editor</option>
-                </select>
-                <Button type="submit" loading={inviting} size="sm">Send invite</Button>
-              </div>
-            </form>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user?.name || 'Unknown'}
+                      {isOnline && <span style={{ color: 'var(--success)', fontSize: '11px', fontWeight: 500, marginLeft: '6px' }}>online</span>}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</div>
+                  </div>
+                  <Badge variant={roleVariant[m.role]}>{m.role}</Badge>
+                </div>
+              );
+            })}
           </div>
         </div>
-      </div>
+
+        {/* Invite */}
+        <div className="rail-card">
+          <h3>Invite member</h3>
+          <form onSubmit={sendInvite} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="colleague@example.com" type="email" />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+                <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
+              </select>
+              <Button type="submit" loading={inviting} size="sm">Send invite</Button>
+            </div>
+          </form>
+        </div>
+      </aside>
 
       <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit project">
         <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

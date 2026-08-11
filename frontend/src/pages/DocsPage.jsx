@@ -8,6 +8,7 @@ import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { SkeletonList } from '../components/ui/Skeleton';
 import useProjectSocket from '../hooks/useProjectSocket';
+import useMyRole from '../hooks/useMyRole';
 import toast from 'react-hot-toast';
 
 export default function DocsPage() {
@@ -18,6 +19,8 @@ export default function DocsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [creating, setCreating] = useState(false);
+  const myRole = useMyRole(projectId);
+  const canEdit = myRole === 'editor' || myRole === 'owner';
 
   useEffect(() => {
     docsApi.list(projectId).then(res => { setDocs(res.data.docs); setLoading(false); }).catch(() => setLoading(false));
@@ -62,10 +65,12 @@ export default function DocsPage() {
             <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em' }}>Docs</h1>
             <p style={{ color: 'var(--muted)', fontSize: '13px', marginTop: '3px' }}>Project documentation</p>
           </div>
-          <Button onClick={() => setShowCreate(true)}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            New doc
-          </Button>
+          {canEdit && (
+            <Button onClick={() => setShowCreate(true)}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New doc
+            </Button>
+          )}
         </div>
       )}
 
@@ -73,13 +78,14 @@ export default function DocsPage() {
         <DocEditor
           projectId={projectId}
           doc={selectedDoc}
+          canEdit={canEdit}
           onSave={(updated) => { setDocs(prev => prev.map(d => d._id === updated._id ? updated : d)); setSelectedDoc(updated); }}
           onClose={() => setSelectedDoc(null)}
         />
       ) : loading ? (
         <SkeletonList count={4} />
       ) : (
-        <DocList docs={docs} onSelect={setSelectedDoc} onDelete={deleteDoc} />
+        <DocList docs={docs} onSelect={setSelectedDoc} onDelete={deleteDoc} canEdit={canEdit} />
       )}
 
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="New document">

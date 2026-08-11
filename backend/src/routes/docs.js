@@ -7,9 +7,9 @@ const router = express.Router({ mergeParams: true });
 router.use(authenticate, requireProjectMember('viewer'));
 
 router.get('/', listDocs);
-router.post('/', [body('title').trim().notEmpty().withMessage('Title is required')], createDoc);
+router.post('/', requireProjectMember('editor'), [body('title').trim().notEmpty().withMessage('Title is required')], createDoc);
 router.get('/:docId', getDoc);
-router.patch('/:docId', updateDoc);
-router.delete('/:docId', deleteDoc);
+router.patch('/:docId', requireProjectMember('editor'), updateDoc);
+router.delete('/:docId', requireProjectMember('editor'), deleteDoc);
 
 module.exports = router;

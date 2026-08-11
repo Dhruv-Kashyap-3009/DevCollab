@@ -1,7 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:5000';
+// Same-origin by default so Vite's /ws proxy (dev) and the deployed origin
+// (prod) both work; the backend serves the socket on the same port as the API.
+const WS_PROTO = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL = import.meta.env.VITE_WS_URL || `${WS_PROTO}//${window.location.host}`;
 
 export default function useProjectSocket(projectId, { onIssueCreated, onIssueUpdated, onCommentAdded, onDocUpdated, onGithubPush, onGithubPR, onUserOnline, onUserOffline, onGithubEvent } = {}) {
   const wsRef = useRef(null);

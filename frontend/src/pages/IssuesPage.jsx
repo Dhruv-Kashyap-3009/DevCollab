@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { issuesApi, projectsApi } from '../api/services';
 import IssueList from '../components/issues/IssueList';
+import IssueFilters from '../components/issues/IssueFilters';
 import IssueForm from '../components/issues/IssueForm';
 import IssueDetail from '../components/issues/IssueDetail';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { SkeletonList } from '../components/ui/Skeleton';
 import useProjectSocket from '../hooks/useProjectSocket';
+import useMyRole from '../hooks/useMyRole';
 import toast from 'react-hot-toast';
 
 export default function IssuesPage() {
@@ -19,6 +21,8 @@ export default function IssuesPage() {
   const [selectedIssue, setSelectedIssue] = useState(null);
   const [creating, setCreating] = useState(false);
   const [members, setMembers] = useState([]);
+  const myRole = useMyRole(projectId);
+  const canEdit = myRole === 'editor' || myRole === 'owner';
 
   useEffect(() => {
     projectsApi.get(projectId).then(res => setMembers(res.data.project?.members || []));
@@ -59,10 +63,12 @@ export default function IssuesPage() {
               {issues.length} issue{issues.length !== 1 ? 's' : ''}
             </p>
           </div>
-          <Button onClick={() => setShowForm(true)}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            New issue
-          </Button>
+          {canEdit && (
+            <Button onClick={() => setShowForm(true)}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New issue
+            </Button>
+          )}
         </div>
       )}
 
@@ -87,17 +93,20 @@ export default function IssuesPage() {
           <IssueDetail
             projectId={projectId}
             issue={selectedIssue}
+            canEdit={canEdit}
             onClose={() => setSelectedIssue(null)}
             onUpdate={(updated) => setIssues(prev => prev.map(i => i._id === updated._id ? updated : i))}
           />
         </div>
       ) : (
-        <IssueList
-          issues={issues}
-          onSelect={setSelectedIssue}
-          onFilterChange={setFilters}
-          filters={filters}
-        />
+        <div className="page-with-rail">
+          <div style={{ minWidth: 0 }}>
+            <IssueList issues={issues} onSelect={setSelectedIssue} />
+          </div>
+          <aside className="rail">
+            <IssueFilters filters={filters} onChange={setFilters} />
+          </aside>
+        </div>
       )}
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="New issue" width="560px">

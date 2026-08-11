@@ -1,6 +1,6 @@
 import Button from '../ui/Button';
 
-export default function GitHubStatus({ status, branches, onDisconnect }) {
+export default function GitHubStatus({ status, branches, onDisconnect, canManage = true }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Connected repo card */}
@@ -26,7 +26,7 @@ export default function GitHubStatus({ status, branches, onDisconnect }) {
             </div>
           </div>
         </div>
-        <Button variant="danger" size="sm" onClick={onDisconnect}>Disconnect</Button>
+        {canManage && <Button variant="danger" size="sm" onClick={onDisconnect}>Disconnect</Button>}
       </div>
 
       {/* Branches */}

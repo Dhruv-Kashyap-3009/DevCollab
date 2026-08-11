@@ -47,7 +47,7 @@ const connectGitHub = async (req, res, next) => {
     );
     await Project.findByIdAndUpdate(req.params.id, { github_repo: repo_owner + '/' + repo_name });
     await logActivity({ project_id: req.params.id, user_id: req.user._id, type: 'github_connected', payload: { repo: repo_owner + '/' + repo_name } });
-    const baseUrl = process.env.API_URL || 'http://localhost:5000';
+    const baseUrl = process.env.API_URL || 'http://localhost:3000';
     const webhookUrl = baseUrl + '/api/github/webhook/' + req.params.id;
     res.status(201).json({ message: 'GitHub connected successfully', webhookUrl, webhookSecret: webhook_secret, repo: repo_owner + '/' + repo_name, connectedAt: integration.connected_at });
   } catch (err) { next(err); }
