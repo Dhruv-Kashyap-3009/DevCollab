@@ -85,6 +85,9 @@ export default function useProjectSocket(projectId, options = {}) {
             opts.onGithubEvent && opts.onGithubEvent(msg);
             toast(`🔁 PR #${msg.number} ${msg.action}: ${msg.title}`, { duration: 4000 });
             break;
+          case 'MEMBER_ADDED':
+            opts.onMemberAdded && opts.onMemberAdded(msg.member);
+            break;
           case 'USER_ONLINE':
             opts.onUserOnline && opts.onUserOnline(msg);
             break;

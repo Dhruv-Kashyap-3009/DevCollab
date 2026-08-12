@@ -348,6 +348,32 @@ async function main() {
   });
   ok(hbWs.pong === true, 'authed member PING -> PONG heartbeat', JSON.stringify(hbWs).slice(0, 80));
 
+  // 10b2. accepting an invite broadcasts MEMBER_ADDED to the project room
+  console.log('\n— MEMBER_ADDED broadcast —');
+  const emailM = 'testM_' + ts + '@devcollab.dev';
+  const regM = await req('POST', '/api/auth/register', { body: { name: 'Member M', email: emailM, password: 'password123' } });
+  ok(regM.status === 201, 'fresh user M registers for the MEMBER_ADDED test');
+  const tokensM = regM.json;
+  const memberWs = await new Promise((resolve, reject) => {
+    const ws = new WebSocket('ws://localhost:3000/ws');
+    const t = setTimeout(() => reject(new Error('ws timeout')), 5000);
+    ws.on('message', (d) => {
+      const m = JSON.parse(d);
+      if (m.type === 'MEMBER_ADDED') { clearTimeout(t); resolve(m); try { ws.close(); } catch {} }
+    });
+    ws.on('open', () => {
+      ws.send(JSON.stringify({ type: 'AUTH', token: tokensB.accessToken, projectId: pid }));
+      setTimeout(async () => {
+        const inv = await req('POST', '/api/projects/' + pid + '/invite', { token: tokensA.accessToken, body: { email: emailM, role: 'viewer' } });
+        const acc = await req('POST', '/api/invite/' + inv.json.token + '/accept', { token: tokensM.accessToken });
+        if (acc.status !== 200) { clearTimeout(t); reject(new Error('accept failed ' + acc.status)); }
+      }, 300);
+    });
+    ws.on('error', () => {});
+  });
+  ok(memberWs && memberWs.type === 'MEMBER_ADDED', 'accepting an invite broadcasts MEMBER_ADDED to the room', JSON.stringify(memberWs).slice(0, 100));
+  ok(memberWs.member && memberWs.member.user_id && memberWs.member.user_id.name === 'Member M', 'MEMBER_ADDED carries the new member name/role', JSON.stringify(memberWs.member || memberWs).slice(0, 120));
+
   // 10c. concurrent issue creation must not collide on issue numbers
   console.log('\n— concurrent issue creation —');
   const parallelCreates = await Promise.all(Array.from({ length: 8 }, (_, i) =>

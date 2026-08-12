@@ -49,7 +49,7 @@ const createProject = async (req, res, next) => {
       members: [{ user_id: req.user._id, role: 'owner' }],
     });
 
-    await logActivity({ project_id: project._id, user_id: req.user._id, type: 'project_updated', payload: { action: 'created', name } });
+    await logActivity({ project_id: project._id, user_id: req.user._id, type: 'project_created', payload: { name } });
     res.status(201).json({ project });
   } catch (err) {
     next(err);
@@ -184,6 +184,24 @@ const acceptInvite = async (req, res, next) => {
       project.members.push({ user_id: req.user._id, role: invite.role });
       await project.save();
       await logActivity({ project_id: project._id, user_id: req.user._id, type: 'member_added', payload: { role: invite.role } });
+      // Tell everyone already in the project room a new member joined — the
+      // members list, member count, and activity feed update live instead of
+      // on refresh. (No broadcast for the already-a-member path: nothing
+      // changed on the project.)
+      const member = project.members.find(m => m.user_id.toString() === req.user._id.toString());
+      broadcastToProject(project._id, {
+        type: 'MEMBER_ADDED',
+        member: {
+          _id: member?._id,
+          role: member?.role || invite.role,
+          user_id: {
+            _id: req.user._id,
+            name: req.user.name,
+            email: req.user.email,
+            avatar_url: req.user.avatar_url || null,
+          },
+        },
+      });
     }
 
     invite.accepted = true;

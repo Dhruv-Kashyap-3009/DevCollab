@@ -15,12 +15,12 @@ const activitySchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: [
-      'issue_created', 'issue_updated', 'issue_closed', 'issue_reopened',
-      'comment_added', 'snippet_created', 'snippet_updated', 'snippet_deleted',
+      'issue_created', 'issue_updated', 'issue_closed', 'issue_reopened', 'issue_deleted',
+      'comment_added', 'snippet_created', 'snippet_updated', 'snippet_deleted', 'snippet_pushed',
       'doc_created', 'doc_updated', 'doc_deleted',
       'member_added', 'member_removed',
       'github_connected', 'github_disconnected', 'github_push', 'github_pr',
-      'project_updated',
+      'project_created', 'project_updated',
     ],
   },
   payload: {

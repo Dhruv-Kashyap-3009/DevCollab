@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { projectsApi, activityApi } from '../api/services';
 import useProjectSocket from '../hooks/useProjectSocket';
@@ -19,14 +19,14 @@ function timeAgo(date) {
 }
 
 const activityColor = {
-  issue_created: 'var(--success)', issue_reopened: 'var(--success)',
+  issue_created: 'var(--success)', issue_reopened: 'var(--success)', issue_deleted: 'var(--danger)',
   issue_updated: 'var(--primary)', issue_closed: 'var(--muted)',
   comment_added: 'var(--primary)',
-  snippet_created: 'var(--warning)', snippet_updated: 'var(--warning)', snippet_deleted: 'var(--muted)',
+  snippet_created: 'var(--warning)', snippet_updated: 'var(--warning)', snippet_deleted: 'var(--muted)', snippet_pushed: 'var(--warning)',
   doc_created: 'var(--purple)', doc_updated: 'var(--purple)', doc_deleted: 'var(--muted)',
   member_added: 'var(--success)',
   github_push: 'var(--primary)', github_pr: 'var(--purple)', github_connected: 'var(--success)',
-  project_updated: 'var(--warning)',
+  project_created: 'var(--success)', project_updated: 'var(--warning)',
 };
 
 const svgProps = {
@@ -96,22 +96,40 @@ export default function ProjectPage() {
   const canEdit = myRole === 'editor' || myRole === 'owner';
   const isOwner = myRole === 'owner';
 
-  useEffect(() => {
+  // Latest-fetch-wins guard: a slow response from an earlier fetch (the mount
+  // load, a MEMBER_ADDED refetch, or a project switch) must never clobber a
+  // newer one. Without this, the initial GET could resolve after a refetch and
+  // render stale members/activity — the exact out-of-sync bug this page is
+  // supposed to avoid.
+  const fetchSeq = useRef(0);
+  const refresh = useCallback(({ silent = false } = {}) => {
+    const seq = ++fetchSeq.current;
     Promise.all([
       projectsApi.get(projectId),
       activityApi.list(projectId, 10),
     ]).then(([projRes, actRes]) => {
+      if (seq !== fetchSeq.current) return; // stale response — a newer fetch won
       setProject(projRes.data.project);
       setStats(projRes.data.stats || {});
       setActivities(actRes.data.activities || []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+      if (!silent) setLoading(false);
+    }).catch(() => {
+      if (seq !== fetchSeq.current) return;
+      if (!silent) setLoading(false);
+    });
   }, [projectId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
 
   useProjectSocket(projectId, {
     onPresenceSnapshot: (msg) => setOnlineMembers(msg.members || []),
     onUserOnline: (msg) => setOnlineMembers(prev => prev.find(m => m.userId === msg.userId) ? prev : [...prev, { userId: msg.userId, userName: msg.userName }]),
     onUserOffline: (msg) => setOnlineMembers(prev => prev.filter(m => m.userId !== msg.userId)),
+    // A new member accepted an invite — re-fetch so the list, count, and
+    // activity feed reflect the server truth (including the real activity
+    // entry). The seq guard makes this race-free: whichever fetch issued last
+    // wins, so a stale initial-load response can never undo the update.
+    onMemberAdded: () => { refresh({ silent: true }); },
   });
 
   const sendInvite = async (e) => {
@@ -201,7 +219,9 @@ export default function ProjectPage() {
           <StatCard label="Open issues" value={stats.openIssues || 0} icon={STAT_ICONS.issues} color="var(--danger)" />
           <StatCard label="Snippets" value={stats.totalSnippets || 0} icon={STAT_ICONS.snippets} color="var(--warning)" />
           <StatCard label="Docs" value={stats.totalDocs || 0} icon={STAT_ICONS.docs} color="var(--purple)" />
-          <StatCard label="Members" value={stats.memberCount || 0} icon={STAT_ICONS.members} color="var(--success)" />
+          {/* Derive the count from the live members array so a MEMBER_ADDED
+              socket update can never drift out of sync with the list. */}
+          <StatCard label="Members" value={project.members?.length || 0} icon={STAT_ICONS.members} color="var(--success)" />
         </div>
 
         {/* Activity timeline */}

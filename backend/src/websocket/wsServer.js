@@ -123,7 +123,10 @@ function broadcastToProject(projectId, data, excludeWs = null) {
   const payload = JSON.stringify(data);
   room.forEach((client) => {
     if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
-      client.send(payload);
+      // A socket can die between the readyState check and the send (concurrent
+      // close/error). One bad client must never 500 the API route that called
+      // us — drop it and keep broadcasting to the rest of the room.
+      try { client.send(payload); } catch { /* dead socket — ignore */ }
     }
   });
 }
