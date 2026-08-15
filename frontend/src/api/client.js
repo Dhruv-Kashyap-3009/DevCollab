@@ -2,7 +2,7 @@ import axios from 'axios';
 import { ensureFreshToken } from './token';
 
 const client = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
