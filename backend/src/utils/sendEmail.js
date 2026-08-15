@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -11,6 +12,12 @@ const transporter = nodemailer.createTransport({
   connectionTimeout: 15000,
   greetingTimeout: 15000,
   socketTimeout: 30000,
+  // Cloud hosts (Render) often have no IPv6 route: smtp.gmail.com resolves to
+  // an IPv6 address first, and the connect fails with ENETUNREACH before ever
+  // falling back to IPv4. Force the lookup to IPv4-only for this connection —
+  // this is independent of process-wide DNS ordering and works on any Node.
+  lookup: (hostname, options, callback) =>
+    dns.lookup(hostname, { ...options, family: 4 }, callback),
 });
 
 const sendInviteEmail = async (toEmail, inviteUrl, projectName, inviterName) => {
