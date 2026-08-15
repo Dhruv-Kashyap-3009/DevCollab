@@ -125,6 +125,7 @@ const inviteMember = async (req, res, next) => {
   try {
     const { email, role = 'viewer' } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Invalid email address' });
     if (!['editor', 'viewer'].includes(role)) return res.status(400).json({ message: 'Invalid role' });
 
     const project = req.project;
@@ -144,7 +145,10 @@ const inviteMember = async (req, res, next) => {
       accepted: false,
       expires_at: { $gt: new Date() },
     });
-    if (existingInvite) return res.status(409).json({ message: 'An invite has already been sent to this email' });
+    if (existingInvite) {
+      const inviteUrl = `${process.env.CLIENT_URL}/invite/${existingInvite.token}/accept`;
+      return res.status(409).json({ message: 'An invite has already been sent to this email', inviteUrl });
+    }
 
     await Invite.create({
       project_id: project._id,
@@ -172,9 +176,25 @@ const inviteMember = async (req, res, next) => {
 const acceptInvite = async (req, res, next) => {
   try {
     const { token } = req.params;
-    const invite = await Invite.findOne({ token, accepted: false }).populate('project_id');
+    const invite = await Invite.findOne({ token }).populate('project_id');
     if (!invite) return res.status(404).json({ message: 'Invalid or expired invite' });
+
+    // A consumed link should not lie: if the requester already joined through
+    // it, re-clicking means "already a member", not "invalid invite".
+    if (invite.accepted) {
+      const acceptedProject = await Project.findById(invite.project_id);
+      const isMember = acceptedProject && acceptedProject.members.some(m => m.user_id.toString() === req.user._id.toString());
+      if (isMember) return res.json({ message: 'Already a member', project_id: acceptedProject._id });
+      return res.status(404).json({ message: 'Invalid or expired invite' });
+    }
+
     if (new Date() > invite.expires_at) return res.status(410).json({ message: 'Invite expired' });
+
+    // Invites are bound to the email they were sent to — a forwarded link must
+    // not let a different account join under its own identity.
+    if (invite.email !== String(req.user.email).toLowerCase()) {
+      return res.status(403).json({ message: 'This invite is for a different email — sign in with the address it was sent to' });
+    }
 
     const project = await Project.findById(invite.project_id);
     if (!project) return res.status(404).json({ message: 'Project not found' });

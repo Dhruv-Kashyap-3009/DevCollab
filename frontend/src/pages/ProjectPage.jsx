@@ -141,7 +141,12 @@ export default function ProjectPage() {
       toast.success('Invite sent! Share this link: ' + res.data.inviteUrl);
       setInviteEmail('');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to send invite');
+      const data = err.response?.data;
+      if (err.response?.status === 409 && data?.inviteUrl) {
+        toast('Invite already sent — share this link: ' + data.inviteUrl, { duration: 8000 });
+      } else {
+        toast.error(data?.message || 'Failed to send invite');
+      }
     } finally { setInviting(false); }
   };
 

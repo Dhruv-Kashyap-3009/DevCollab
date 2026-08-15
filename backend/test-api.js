@@ -334,6 +334,37 @@ async function main() {
   ok(snap.msg.members.some(m => m.userId && m.userName), 'snapshot lists the already-connected member (B)', JSON.stringify(snap.msg.members).slice(0, 100));
   ok(!snap.msg.members.some(m => m.userId === (tokensC.user && tokensC.user._id)), 'snapshot excludes the joining member themselves', 'self=' + (tokensC.user && tokensC.user._id) + ' listed=' + JSON.stringify(snap.msg.members));
 
+  // 10b1. invite edge cases: email binding, re-share link, validation
+  console.log('\n— invite edge cases —');
+  const emailX = 'edgeX_' + ts + '@devcollab.dev';
+  const emailY = 'edgeY_' + ts + '@devcollab.dev';
+  r = await req('POST', '/api/auth/register', { body: { name: 'Edge X', email: emailX, password: 'password123' } });
+  ok(r.status === 201 && r.json.accessToken, 'register edge user X', 'got ' + r.status);
+  const tokensX = r.json;
+  r = await req('POST', '/api/auth/register', { body: { name: 'Edge Y', email: emailY, password: 'password123' } });
+  ok(r.status === 201 && r.json.accessToken, 'register edge user Y', 'got ' + r.status);
+  const tokensY = r.json;
+  // separate project so the main flow's member counts stay intact
+  r = await req('POST', '/api/projects', { token: tokensA.accessToken, body: { name: 'Edge Project ' + ts } });
+  const edgePid = r.json.project._id;
+  r = await req('POST', '/api/projects/' + edgePid + '/invite', { token: tokensA.accessToken, body: { email: 'not-an-email', role: 'viewer' } });
+  ok(r.status === 400 && /email/i.test(r.json.message), 'invite with malformed email -> 400', r.status + ' ' + JSON.stringify(r.json).slice(0, 80));
+  r = await req('POST', '/api/projects/' + edgePid + '/invite', { token: tokensA.accessToken, body: { email: emailX, role: 'editor' } });
+  ok((r.status === 200 || r.status === 201) && r.json.token && r.json.inviteUrl, 'invite created with a shareable inviteUrl', 'got ' + r.status);
+  const edgeToken = r.json.token;
+  const edgeUrl = r.json.inviteUrl;
+  ok(edgeUrl.indexOf('/invite/' + edgeToken + '/accept') !== -1, 'inviteUrl links to the accept page');
+  r = await req('POST', '/api/projects/' + edgePid + '/invite', { token: tokensA.accessToken, body: { email: emailX, role: 'viewer' } });
+  ok(r.status === 409 && r.json.inviteUrl === edgeUrl, 're-invite -> 409 carrying the same inviteUrl', r.status + ' ' + JSON.stringify(r.json).slice(0, 100));
+  r = await req('POST', '/api/invite/' + edgeToken + '/accept', { token: tokensY.accessToken });
+  ok(r.status === 403, 'accept with a different email -> 403', r.status + ' ' + JSON.stringify(r.json).slice(0, 100));
+  r = await req('POST', '/api/invite/' + edgeToken + '/accept', { token: tokensX.accessToken });
+  ok(r.status === 200 && r.json.project_id === edgePid, 'correct email accepts after the 403', r.status + ' ' + JSON.stringify(r.json).slice(0, 100));
+  r = await req('POST', '/api/invite/' + edgeToken + '/accept', { token: tokensX.accessToken });
+  ok(r.status === 200 && /already/i.test(r.json.message), 're-clicking a used invite -> already a member', r.status + ' ' + JSON.stringify(r.json).slice(0, 100));
+  r = await req('DELETE', '/api/projects/' + edgePid, { token: tokensA.accessToken });
+  ok(r.status === 200, 'edge project cleaned up');
+
   // heartbeat: an authed member's PING is answered with a PONG
   const hbWs = await new Promise((resolve) => {
     const ws = new WebSocket('ws://localhost:3000/ws');
