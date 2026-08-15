@@ -22,6 +22,12 @@ export default function AcceptInvitePage() {
         setTimeout(() => navigate(`/projects/${res.data.project_id}`), 2000);
       })
       .catch(err => {
+        if (err.response?.status === 401) {
+          // Not signed in (or the session expired) — send them through login
+          // while keeping the invite token in the URL via ?next=.
+          navigate('/login?next=' + encodeURIComponent('/invite/' + token + '/accept'));
+          return;
+        }
         setStatus('error');
         setMessage(err.response?.data?.message || 'Invalid or expired invite link');
       });

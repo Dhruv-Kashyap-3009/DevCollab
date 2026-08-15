@@ -65,7 +65,7 @@ const updateDoc = async (req, res, next) => {
     if (!doc) return res.status(404).json({ message: 'Doc not found' });
 
     await logActivity({ project_id: req.params.id, user_id: req.user._id, type: 'doc_updated', payload: { title: doc.title } });
-    broadcastToProject(req.params.id, { type: 'DOC_UPDATED', docId: doc._id, title: doc.title, editorName: req.user.name });
+    broadcastToProject(req.params.id, { type: 'DOC_UPDATED', docId: doc._id, title: doc.title, editorName: req.user.name, editorId: req.user._id });
 
     res.json({ doc });
   } catch (err) {

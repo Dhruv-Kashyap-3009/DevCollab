@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { ensureFreshToken } from '../api/token';
+import useAuthStore from '../store/authStore';
 
 // Same-origin by default so Vite's /ws proxy (dev) and the deployed origin
 // (prod) both work; the backend serves the socket on the same port as the API.
@@ -73,7 +74,14 @@ export default function useProjectSocket(projectId, options = {}) {
             break;
           case 'DOC_UPDATED':
             opts.onDocUpdated && opts.onDocUpdated(msg);
-            toast(`📄 Doc updated by ${msg.editorName}`, { duration: 3000 });
+            // Don't toast your own edits — the editor already shows a "Saved"
+            // toast, and the broadcast comes back to the sender's own socket.
+            {
+              const me = useAuthStore.getState().user?._id;
+              if (!msg.editorId || String(msg.editorId) !== String(me)) {
+                toast(`📄 Doc updated by ${msg.editorName}`, { duration: 3000 });
+              }
+            }
             break;
           case 'GITHUB_PUSH':
             opts.onGithubPush && opts.onGithubPush(msg);

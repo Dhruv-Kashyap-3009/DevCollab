@@ -57,9 +57,11 @@ export default function App() {
           <Route index element={<SettingsPage />} />
         </Route>
 
-        <Route path="/invite/:token/accept" element={
-          <RequireAuth><AcceptInvitePage /></RequireAuth>
-        } />
+        {/* NOT wrapped in RequireAuth: a new team member opening the email link
+            isn't signed in yet, and a login redirect here would drop the token
+            from the URL. AcceptInvitePage handles "not signed in" itself by
+            routing to /login?next=... so the token survives the login. */}
+        <Route path="/invite/:token/accept" element={<AcceptInvitePage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

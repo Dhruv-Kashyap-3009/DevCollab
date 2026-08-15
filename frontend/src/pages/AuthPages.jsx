@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -38,6 +38,8 @@ function AuthShell({ children }) {
 export function LoginPage() {
   const { login } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get('next') || '/';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
@@ -52,7 +54,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate(next);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Login failed');
       setErrors({ password: err.response?.data?.message });
@@ -70,7 +72,7 @@ export function LoginPage() {
       </form>
       <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--muted)', marginTop: '20px' }}>
         No account?{' '}
-        <Link to="/register" style={{ color: 'var(--primary)', fontWeight: 500 }}>Create one</Link>
+        <Link to={next !== '/' ? `/register?next=${encodeURIComponent(next)}` : '/register'} style={{ color: 'var(--primary)', fontWeight: 500 }}>Create one</Link>
       </p>
     </AuthShell>
   );
@@ -79,6 +81,8 @@ export function LoginPage() {
 export function RegisterPage() {
   const { register } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get('next') || '/';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -95,7 +99,7 @@ export function RegisterPage() {
     setLoading(true);
     try {
       await register(name, email, password);
-      navigate('/');
+      navigate(next);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
     } finally { setLoading(false); }
@@ -113,7 +117,7 @@ export function RegisterPage() {
       </form>
       <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--muted)', marginTop: '20px' }}>
         Already have an account?{' '}
-        <Link to="/login" style={{ color: 'var(--primary)', fontWeight: 500 }}>Sign in</Link>
+        <Link to={next !== '/' ? `/login?next=${encodeURIComponent(next)}` : '/login'} style={{ color: 'var(--primary)', fontWeight: 500 }}>Sign in</Link>
       </p>
     </AuthShell>
   );
