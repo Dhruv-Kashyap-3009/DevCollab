@@ -1,5 +1,14 @@
 import axios from 'axios';
 
+// Bare instance for the refresh call only. It MUST NOT use the shared client:
+// the client's request interceptor calls ensureFreshToken(), which calls this
+// function — that would recurse forever. Same base URL (VITE_API_URL in prod,
+// /api in dev) so refresh goes to the real backend, not the SPA origin.
+const refreshClient = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  headers: { 'Content-Type': 'application/json' },
+});
+
 // Single-flight refresh: concurrent callers share one in-flight request so we
 // never issue parallel /auth/refresh calls.
 let refreshPromise = null;
@@ -26,7 +35,7 @@ async function doRefresh() {
   const refreshToken = localStorage.getItem('refreshToken');
   if (!refreshToken) return null;
   try {
-    const res = await axios.post('/api/auth/refresh', { refreshToken }, { timeout: 8000 });
+    const res = await refreshClient.post('/auth/refresh', { refreshToken }, { timeout: 8000 });
     const { accessToken, refreshToken: newRefresh } = res.data;
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', newRefresh);
