@@ -161,13 +161,14 @@ const inviteMember = async (req, res, next) => {
 
     const inviteUrl = `${process.env.CLIENT_URL}/invite/${token}/accept`;
 
-    try {
-      await sendInviteEmail(email, inviteUrl, project.name, req.user.name);
-    } catch (emailErr) {
-      console.error('Email failed:', emailErr.message);
-    }
-
+    // Respond immediately — the invite is created and the link is already
+    // valid. Sending the email inline made the whole request wait on SMTP,
+    // so a slow mail server left the button spinning for minutes. Email is
+    // now a fire-and-forget side effect; failure is logged, never blocking.
     res.status(201).json({ message: 'Invite created', inviteUrl, token });
+
+    sendInviteEmail(email, inviteUrl, project.name, req.user.name)
+      .catch((emailErr) => console.error('Email failed:', emailErr.message));
   } catch (err) {
     next(err);
   }

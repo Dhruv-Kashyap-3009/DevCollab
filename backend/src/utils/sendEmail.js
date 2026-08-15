@@ -6,6 +6,11 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  // Bound every stage of the SMTP exchange so a slow/unreachable mail server
+  // can never stall a request (or a background send) for minutes.
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 30000,
 });
 
 const sendInviteEmail = async (toEmail, inviteUrl, projectName, inviterName) => {
