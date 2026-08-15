@@ -1,5 +1,11 @@
 require('dotenv').config();
 
+const dns = require('dns');
+// Cloud hosts (Render, etc.) often have no IPv6 route. Gmail's SMTP resolves
+// to an IPv6 address first, so the connection fails with ENETUNREACH and never
+// falls back to IPv4. Prefer IPv4-first resolution process-wide.
+dns.setDefaultResultOrder('ipv4first');
+
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
