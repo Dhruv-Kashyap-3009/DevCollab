@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { projectsApi, activityApi } from '../api/services';
+import { sendInviteEmail } from '../utils/email';
+import useAuthStore from '../store/authStore';
 import useProjectSocket from '../hooks/useProjectSocket';
 import Avatar from '../components/ui/Avatar';
 import Badge from '../components/ui/Badge';
@@ -93,6 +95,7 @@ export default function ProjectPage() {
   const [deleting, setDeleting] = useState(false);
   // The project payload from getProject already carries myRole — derive the
   // gates from it instead of fetching the project a second time.
+  const user = useAuthStore(s => s.user);
   const myRole = project?.myRole;
   const canEdit = myRole === 'editor' || myRole === 'owner';
   const isOwner = myRole === 'owner';
@@ -146,8 +149,22 @@ export default function ProjectPage() {
     setInviting(true);
     try {
       const res = await projectsApi.invite(projectId, { email: inviteEmail, role: inviteRole });
-      setLastInviteUrl(res.data.inviteUrl);
-      toast.success('Invite created — share the link below');
+      const inviteUrl = res.data.inviteUrl;
+      setLastInviteUrl(inviteUrl);
+
+      // Try to send email via EmailJS (fire-and-forget, non-blocking).
+      const emailSent = await sendInviteEmail({
+        toEmail: inviteEmail,
+        projectName: project.name,
+        inviterName: user?.name || 'Someone',
+        inviteLink: inviteUrl,
+      });
+
+      if (emailSent) {
+        toast.success('Invite email sent to ' + inviteEmail);
+      } else {
+        toast('Invite created — copy the link below to share', { duration: 6000 });
+      }
       setInviteEmail('');
     } catch (err) {
       const data = err.response?.data;

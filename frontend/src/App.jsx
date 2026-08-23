@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import useAuthStore from './store/authStore';
+import { initEmailJS } from './utils/email';
 import AppLayout from './components/layout/AppLayout';
 import { LoginPage, RegisterPage } from './pages/AuthPages';
 import DashboardPage from './pages/DashboardPage';
@@ -27,7 +28,7 @@ function RequireAuth({ children }) {
 export default function App() {
   const init = useAuthStore(s => s.init);
 
-  useEffect(() => { init(); }, [init]);
+  useEffect(() => { init(); initEmailJS(); }, [init]);
 
   return (
     <BrowserRouter>
