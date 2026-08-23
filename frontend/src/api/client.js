@@ -12,43 +12,47 @@ const client = axios.create({
 client.interceptors.request.use(async (config) => {
   try {
     const token = await ensureFreshToken();
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      // Both access and refresh tokens are dead — session is over.
+      // Don't send a doomed request; clear state and redirect to login.
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      if (!redirecting) {
+        redirecting = true;
+        window.location.href = '/login';
+      }
+      return Promise.reject(new Error('Session expired'));
+    }
   } catch {
-    // No token available — send unauthenticated; the 401 handler below decides.
+    // Refresh itself failed (network error etc.) — also treat as dead session.
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    if (!redirecting) {
+      redirecting = true;
+      window.location.href = '/login';
+    }
+    return Promise.reject(new Error('Session expired'));
   }
   return config;
 });
 
-// Safety net for races (token expired mid-flight, server-side clock skew):
-// refresh once and retry. If the refresh itself fails, the session is dead —
-// clear tokens and send the user to login.
 let redirecting = false;
 
 client.interceptors.response.use(
   (res) => res,
   async (error) => {
-    const original = error.config;
-    if (
-      error.response?.status === 401 &&
-      error.response?.data?.code === 'TOKEN_EXPIRED' &&
-      !original._retry
-    ) {
-      original._retry = true;
-      try {
-        const token = await ensureFreshToken();
-        if (!token) throw new Error('Cannot refresh');
-        original.headers.Authorization = `Bearer ${token}`;
-        return client(original);
-      } catch (err) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        if (!redirecting) {
-          redirecting = true;
-          window.location.href = '/login';
-        }
-        return Promise.reject(err);
+    // Any 401 means the session is dead — clear tokens and redirect to login.
+    if (error.response?.status === 401) {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      if (!redirecting) {
+        redirecting = true;
+        window.location.href = '/login';
       }
     }
+
     return Promise.reject(error);
   }
 );
