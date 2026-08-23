@@ -83,6 +83,7 @@ export default function ProjectPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('viewer');
   const [inviting, setInviting] = useState(false);
+  const [lastInviteUrl, setLastInviteUrl] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
@@ -132,18 +133,27 @@ export default function ProjectPage() {
     onMemberAdded: () => { refresh({ silent: true }); },
   });
 
+  const copyInviteLink = (url) => {
+    navigator.clipboard.writeText(url).then(
+      () => toast.success('Link copied to clipboard'),
+      () => toast.error('Failed to copy'),
+    );
+  };
+
   const sendInvite = async (e) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
     setInviting(true);
     try {
       const res = await projectsApi.invite(projectId, { email: inviteEmail, role: inviteRole });
-      toast.success('Invite sent! Share this link: ' + res.data.inviteUrl);
+      setLastInviteUrl(res.data.inviteUrl);
+      toast.success('Invite created — share the link below');
       setInviteEmail('');
     } catch (err) {
       const data = err.response?.data;
       if (err.response?.status === 409 && data?.inviteUrl) {
-        toast('Invite already sent — share this link: ' + data.inviteUrl, { duration: 8000 });
+        setLastInviteUrl(data.inviteUrl);
+        toast('Invite already sent — share the link below', { duration: 6000 });
       } else {
         toast.error(data?.message || 'Failed to send invite');
       }
@@ -315,6 +325,35 @@ export default function ProjectPage() {
                 <Button type="submit" loading={inviting} size="sm">Send invite</Button>
               </div>
             </form>
+            {lastInviteUrl && (
+              <div style={{
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', padding: '10px 12px',
+                display: 'flex', flexDirection: 'column', gap: '8px',
+              }}>
+                <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 500 }}>Invite link</span>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <span style={{
+                    flex: 1, fontSize: '12px', fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-secondary)', overflow: 'hidden',
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{lastInviteUrl}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyInviteLink(lastInviteUrl)}
+                    style={{
+                      background: 'var(--primary)', color: '#fff', border: 'none',
+                      borderRadius: 'var(--radius-sm)', padding: '6px 10px',
+                      fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                      fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+                      transition: 'background 0.15s ease',
+                    }}
+                    onMouseEnter={e => e.target.style.background = 'var(--primary-hover)'}
+                    onMouseLeave={e => e.target.style.background = 'var(--primary)'}
+                  >Copy link</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </aside>
