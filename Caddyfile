@@ -1,0 +1,13 @@
+# Optional HTTPS front door (used by docker-compose.tls.yml).
+#
+# Caddy obtains and renews a certificate for DOMAIN automatically:
+#   - a real public domain (DNS pointing at this host) gets a Let's Encrypt cert
+#   - localhost gets Caddy's internal CA (the browser warns until you run
+#     `docker compose -f docker-compose.yml -f docker-compose.tls.yml exec caddy caddy trust`)
+#
+# Everything is proxied to nginx, which already routes /api and /ws to the
+# backend and serves the SPA. Caddy handles WebSocket upgrades automatically.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy frontend:80
+}

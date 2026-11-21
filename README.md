@@ -203,6 +203,142 @@ The app will be running at `http://localhost:5173`
 
 ---
 
+## Run with Docker
+
+Run the whole stack (React SPA on nginx, Express API, MongoDB) with one command — no local Node or MongoDB install required.
+
+### Prerequisites
+
+- **Docker Desktop for Windows** (WSL 2 backend recommended) with Docker Compose v2
+- Free ports: `80` (frontend), `3000` (backend), `27017` (dev only)
+- Verify: `docker --version` and `docker compose version`
+
+### 1. Create the environment file
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Then edit `.env` and replace the placeholders. `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY` (must be **exactly 32 characters**) and the four `MONGO_*` values are mandatory. Email settings are only needed for invites — signup and login work without them.
+
+> In Docker, the backend connects to the compose service `mongo`, never `localhost`. Compose builds `MONGO_URI` from `MONGO_APP_USER` / `MONGO_APP_PASSWORD` — you do not edit it. Keep the app password **URL-safe** (letters, digits, `-`, `_`) because it is embedded in a `mongodb://` URI.
+
+### 2. Start the stack
+
+```powershell
+docker compose up -d --build
+```
+
+Open **http://localhost**. The API is also reachable directly at http://localhost:3000/health.
+
+### Common commands (PowerShell / CMD)
+
+| Task | Command |
+|---|---|
+| Start (build if needed) | `docker compose up -d --build` |
+| Start without rebuilding | `docker compose up -d` |
+| Follow all logs | `docker compose logs -f` |
+| Logs for one service | `docker compose logs -f backend` |
+| Show container health | `docker compose ps` |
+| Rebuild one service | `docker compose build backend` then `docker compose up -d backend` |
+| Rebuild everything from scratch | `docker compose build --no-cache` |
+| Restart the API | `docker compose restart backend` |
+| Open a shell in the API | `docker compose exec backend sh` |
+| Stop containers (keeps data) | `docker compose down` |
+| Stop and delete the Mongo volume | `docker compose down -v` |
+
+### Development with hot reload
+
+```powershell
+docker compose -f docker-compose.dev.yml up --build
+```
+
+- Frontend: http://localhost:5173 (Vite HMR, source bind-mounted)
+- Backend: http://localhost:3000 (nodemon, source bind-mounted)
+- MongoDB: `localhost:27017` (also usable from a local `npm run dev`)
+
+Set `CLIENT_URL=http://localhost:5173` in `.env` for invite links during development. Stop it with `docker compose -f docker-compose.dev.yml down`.
+
+Both dev and production stacks can coexist, but only one at a time can bind port 3000.
+
+### MongoDB authentication
+
+Mongo in this stack is **not** open: the `mongo` image creates a root user from `MONGO_ROOT_USERNAME` / `MONGO_ROOT_PASSWORD`, and `mongo/init/01-app-user.js` creates a separate least-privilege user (`readWrite` on `devcollab` only) that the backend logs in with. The backend never sees the root credentials.
+
+MongoDB runs init scripts **only on the first start of an empty data volume**. If your volume predates authentication, the backend will fail to connect until you either create the user manually or recreate the volume:
+
+```powershell
+docker compose down -v   # deletes all local Docker data in this stack
+docker compose up -d --build
+```
+
+Connect with the CLI as the app user:
+
+```powershell
+docker compose exec mongo mongosh "mongodb://devcollab:YOUR_APP_PASSWORD@localhost:27017/devcollab?authSource=devcollab"
+```
+
+Use the root user only for administration (`--authenticationDatabase admin`). Changing the passwords in `.env` afterwards does not update users inside an existing volume.
+
+### HTTPS with Caddy
+
+`docker-compose.yml` alone serves plain HTTP on port 80. To get automatic TLS, add the override — Caddy takes over ports 80/443 and nginx is only reachable inside the compose network:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+```
+
+- **Real domain:** point DNS at the host, set `DOMAIN=devcollab.example.com` in `.env`, and also set `CLIENT_URL=https://devcollab.example.com` and `API_URL=https://devcollab.example.com`. Caddy obtains and renews the certificate automatically. Ports 80 and 443 must be reachable from the internet.
+- **localhost:** `DOMAIN=localhost` (the default) uses Caddy's internal CA. Browsers warn until you trust it:
+
+  ```powershell
+  docker compose -f docker-compose.yml -f docker-compose.tls.yml exec caddy caddy trust
+  ```
+
+Certificates live in the `caddy_data` named volume — removing it forces re-issuance (and can hit Let's Encrypt rate limits). WebSocket upgrades need no extra configuration: Caddy handles them, and nginx still proxies `/ws` to the backend.
+
+To switch back to plain HTTP: `docker compose -f docker-compose.yml -f docker-compose.tls.yml down` and then `docker compose up -d`.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main`, every pull request, and manually:
+
+| Job | What it does |
+|---|---|
+| `frontend` | `npm ci` + `vite build` with npm caching |
+| `backend` | `npm ci` + `node --check` on every file in `backend/src` |
+| `docker` | Builds both production images with GitHub Actions layer cache |
+| `smoke` | Generates a throwaway `.env`, starts the full stack, waits for `/health`, checks the SPA and deep links, registers and logs in through nginx, asserts the user exists in Mongo, then tears everything down |
+
+To publish the frontend build artifacts or add image pushes, extend the `docker` job. For branch protection, enable **Require status checks to pass before merging** and select the four jobs above.
+
+### How the services fit together
+
+```
+Browser ──▶ caddy :443 (optional, TLS)  ──▶ frontend (nginx :80)
+                                              ├── static SPA (index.html fallback for deep links)
+                                              ├── /api  ──▶ backend:3000
+                                              └── /ws   ──▶ backend:3000 (WebSocket upgrade)
+                                                           └──▶ mongo:27017 (authenticated)
+```
+
+Only the edge ports are published (Caddy's 80/443 when the TLS override is used, otherwise nginx's 80, plus the backend's 3000); MongoDB is reachable only on the internal `devcollab` network in production.
+
+### Troubleshooting
+
+- **`JWT_SECRET is required`** — `docker compose` cannot find `.env`; run it from the repo root and confirm the file is named exactly `.env`.
+- **Port 80 already in use** — stop IIS/another web server, or change `"80:80"` to e.g. `"8080:80"` and open http://localhost:8080.
+- **Backend restarts with `MongoDB connection error: Authentication failed`** — the data volume predates MongoDB authentication, so `mongo/init/01-app-user.js` never ran. Run `docker compose down -v` (deletes data) and start again, or create the user manually in `mongosh`.
+- **Backend restarts with `MongoDB connection error`** — the backend only starts after Mongo is healthy; check `docker compose logs mongo`. If the volume was created by an older Mongo major version, run `docker compose down -v` (deletes data) or pin the old image tag.
+- **Caddy serves a certificate warning** — expected for `DOMAIN=localhost` (internal CA): run `caddy trust` as above. For a real domain, verify DNS resolves to this host and ports 80/443 are open.
+- **Frontend shows 502 on `/api`** — backend is not healthy yet: `docker compose ps` and `docker compose logs backend`.
+- **Deep links return 404 after a refresh** — confirm `frontend/nginx.conf` is the one baked into the image (`docker compose build frontend`).
+- **Emails are not sent** — SMTP failures do not block invites from being created; verify `EMAIL_USER`/`EMAIL_PASS` (Gmail App Password), or set `EMAIL_API_KEY` for Resend.
+- **Stale code after editing** — production images are immutable: `docker compose up -d --build`. Use the dev compose file for live editing.
+- **Windows line-ending noise in Git** — Docker files are plain text; if you see `\r` issues, add a `.gitattributes` entry with `* text=auto eol=lf`.
+
+---
+
 ## Deployment
 
 DevCollab is designed to run as **one server**: the backend serves the API, the WebSocket, **and** the built frontend from the same origin, so no CORS or proxy configuration is needed.

@@ -1,1 +1,13 @@
 .freebuff
+
+# Environment files (keep the template, never the real values)
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.template
+
+# Docker / logs
+logs
+*.log

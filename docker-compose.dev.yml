@@ -1,0 +1,88 @@
+name: devcollab-dev
+
+# Development stack: source is bind-mounted, Vite and nodemon hot-reload.
+# Usage: docker compose -f docker-compose.dev.yml up
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?MONGO_ROOT_USERNAME is required (see .env.example)}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required (see .env.example)}
+      MONGO_INITDB_DATABASE: devcollab
+      MONGO_APP_USER: ${MONGO_APP_USER:-devcollab}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required (see .env.example)}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data_dev:/data/db
+      - ./mongo/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - devcollab
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --authenticationDatabase admin -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --eval \"quit(db.adminCommand('ping').ok ? 0 : 2)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    # -L (legacy watch) polls for changes so nodemon also sees edits made on the
+    # Windows host through the bind mount.
+    command: npx nodemon -L src/app.js
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      MONGO_URI: mongodb://${MONGO_APP_USER:-devcollab}:${MONGO_APP_PASSWORD}@mongo:27017/devcollab?authSource=devcollab
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (see .env.example)}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required (see .env.example)}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (see .env.example)}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
+      API_URL: ${API_URL:-http://localhost:3000}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASS: ${EMAIL_PASS:-}
+      EMAIL_API_KEY: ${EMAIL_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-DevCollab <onboarding@resend.dev>}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      # Keep the image's node_modules instead of the Windows host's copies.
+      - /app/node_modules
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - devcollab
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    restart: unless-stopped
+    environment:
+      # Vite dev server proxies /api and /ws to the backend container.
+      API_PROXY_TARGET: http://backend:3000
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - devcollab
+
+volumes:
+  mongo_data_dev:
+
+networks:
+  devcollab:
+    driver: bridge

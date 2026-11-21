@@ -1,0 +1,78 @@
+name: devcollab
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      # The image creates this root user on the first start of an empty volume.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?MONGO_ROOT_USERNAME is required (see .env.example)}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required (see .env.example)}
+      MONGO_INITDB_DATABASE: devcollab
+      # Consumed by mongo/init/01-app-user.js to create the least-privilege
+      # user the backend authenticates with.
+      MONGO_APP_USER: ${MONGO_APP_USER:-devcollab}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required (see .env.example)}
+    volumes:
+      - mongo_data:/data/db
+      # `:ro` + no `z` flag keeps Windows/WSL bind mounts happy.
+      - ./mongo/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - devcollab
+    healthcheck:
+      # $$ escapes compose interpolation so the shell expands the vars inside
+      # the container; authentication is now required for `ping`.
+      test: ["CMD-SHELL", "mongosh --quiet --authenticationDatabase admin -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --eval \"quit(db.adminCommand('ping').ok ? 0 : 2)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      target: production
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Service name `mongo`, never localhost — localhost inside the backend
+      # container is the backend container itself. The password is embedded in
+      # a URI, so keep MONGO_APP_PASSWORD URL-safe (letters, digits, - and _).
+      MONGO_URI: mongodb://${MONGO_APP_USER:-devcollab}:${MONGO_APP_PASSWORD}@mongo:27017/devcollab?authSource=devcollab
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (see .env.example)}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required (see .env.example)}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (see .env.example)}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost}
+      API_URL: ${API_URL:-http://localhost:3000}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASS: ${EMAIL_PASS:-}
+      EMAIL_API_KEY: ${EMAIL_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-DevCollab <onboarding@resend.dev>}
+    ports:
+      - "3000:3000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - devcollab
+
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - devcollab
+
+volumes:
+  mongo_data:
+
+networks:
+  devcollab:
+    driver: bridge

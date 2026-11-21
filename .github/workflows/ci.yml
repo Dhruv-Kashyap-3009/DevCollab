@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+  backend:
+    name: Backend syntax check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: node --check every source file
+        run: find src -name '*.js' -print0 | xargs -0 -n1 node --check
+
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          target: production
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: production
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  smoke:
+    name: Compose smoke test
+    runs-on: ubuntu-latest
+    needs: [docker]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create throwaway .env
+        run: |
+          {
+            echo "MONGO_ROOT_USERNAME=ci_root"
+            echo "MONGO_ROOT_PASSWORD=$(openssl rand -hex 16)"
+            echo "MONGO_APP_USER=devcollab"
+            echo "MONGO_APP_PASSWORD=$(openssl rand -hex 16)"
+            echo "JWT_SECRET=$(openssl rand -base64 48)"
+            echo "JWT_REFRESH_SECRET=$(openssl rand -base64 48)"
+            echo "ENCRYPTION_KEY=$(openssl rand -hex 16)"
+            echo "CLIENT_URL=http://localhost"
+            echo "API_URL=http://localhost:3000"
+          } > .env
+          docker compose config --quiet
+
+      - name: Start the stack
+        run: docker compose up -d --build
+
+      - name: Wait for the API to report a healthy database
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3000/health > /dev/null; then
+              echo "API healthy after ${i} attempt(s)"
+              curl -fsS http://localhost:3000/health
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "API did not become healthy in time" >&2
+          exit 1
+
+      - name: Check nginx serves the SPA and proxies the API
+        run: |
+          curl -fsS -o /dev/null -w "SPA: %{http_code}\n" http://localhost/
+          curl -fsS -o /dev/null -w "Deep link: %{http_code}\n" http://localhost/projects/does-not-exist
+          curl -fsS http://localhost/api/auth/me -H 'Authorization: Bearer invalid' -o /dev/null -w "API (401 expected): %{http_code}\n" || true
+
+      - name: Register and log in through the frontend origin
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST http://localhost/api/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"CI Bot","email":"ci@example.com","password":"CiPassword123!"}' \
+            | grep -q accessToken
+
+          curl -fsS -X POST http://localhost/api/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci@example.com","password":"CiPassword123!"}' \
+            | grep -q accessToken
+
+      - name: Verify the user was persisted in MongoDB
+        run: |
+          set -a; . ./.env; set +a
+          docker compose exec -T mongo mongosh --quiet \
+            --authenticationDatabase admin \
+            -u "$MONGO_ROOT_USERNAME" -p "$MONGO_ROOT_PASSWORD" \
+            --eval 'quit(db.getSiblingDB("devcollab").users.countDocuments() === 1 ? 0 : 2)'
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=200
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

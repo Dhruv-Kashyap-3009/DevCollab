@@ -1,0 +1,38 @@
+# Optional override that puts Caddy (automatic HTTPS) in front of the stack.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+#
+# Without this file the stack behaves exactly as before: nginx publishes port 80
+# and Caddy is not started. With it, nginx is only reachable inside the compose
+# network and Caddy owns 80/443.
+
+services:
+  frontend:
+    # `!reset` clears the inherited "80:80" mapping so Caddy can bind port 80.
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      # localhost -> internal CA; a real domain -> automatic Let's Encrypt.
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and ACME account keys must survive restarts.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks:
+      - devcollab
+
+volumes:
+  caddy_data:
+  caddy_config:
